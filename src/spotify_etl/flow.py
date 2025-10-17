@@ -1,4 +1,5 @@
 from prefect import flow, task, get_run_logger
+from prefect.events import emit_event
 from prefect.blocks.system import Secret
 from prefect_sqlalchemy import SqlAlchemyConnector
 from spotipy.oauth2 import SpotifyOAuth
@@ -85,8 +86,10 @@ def extract_played():
     if not played_raw.empty:
         played_raw.to_csv(DATA_PATH / "played_raw.csv", index=False)
         logger.info(f"Saved {len(played_raw)} records to played_raw.csv")
+        return True
     else:
         logger.info("No new recently played data found.")
+        return False
 
 
 @task
@@ -208,13 +211,21 @@ def cleanup():
 @flow()
 def spotify_etl():
     create_db_tables()
-    extract_played()
-    extract_track()
-    transform_track()
-    extract_artist()
-    load_tables()
-    insert_prod()
-    cleanup()
+    got_new_data = extract_played()
+
+    if got_new_data:
+        extract_track()
+        transform_track()
+        extract_artist()
+        load_tables()
+        insert_prod()
+        cleanup()
+        emit_event(event="new-data", resource={"prefect.resource.id": "spotify-etl.data"})
+
+    else:
+        # optional: log that nothing else will run
+        logger = get_run_logger()
+        logger.info("No new data fetched — skipping downstream tasks.")
 
 
 if __name__ == "__main__":
