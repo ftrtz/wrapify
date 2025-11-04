@@ -1,7 +1,7 @@
 # spotify-listening-habits
 *ETL-Pipeline to extract recently played tracks and corresponding artist info from spotify and load to a postgresql database using Prefect.*
 
-## Task Overvierw & Database Schema
+## Task Overvier & Database Schema
 #### Tasks
 
 ```mermaid

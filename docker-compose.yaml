@@ -1,5 +1,7 @@
 services:
   web:
+    container_name: spotify-analytics-api
+    restart: unless-stopped
     build: .
     ports:
       - ${PORT:-8000}:8000
