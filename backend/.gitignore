@@ -1,0 +1,10 @@
+/config
+/logs
+/plugins
+/dags/.cache
+__pycache__
+/dags/data
+/upload/SpotifyExtendedStreamingHistory
+/.venv
+.env
+.cache
