@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wrapify"
+version = "0.1.0"
+description = "Spotify listening analytics platform with ETL pipeline, API, and dashboard"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    # ETL dependencies
+    "pandas>=2.3.1",
+    "spotipy>=2.25.1",
+    "sqlalchemy>=2.0.43",
+    "prefect[sqlalchemy]>=3.4.13",
+    "psycopg2-binary>=2.9.10",
+    # API dependencies
+    "fastapi[standard]>=0.116.1",
+    "uvicorn>=0.35.0",
+    # Dashboard dependencies
+    "polars>=1.31.0",
+    "connectorx>=0.4.4",
+    "streamlit>=1.47.0",
+    "streamlit-extras>=0.7.5",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+    "ruff>=0.12.4",
+    "notebook>=7.4.4",
+]
+
+[tool.prefect]
+api.url = "http://127.0.0.1:4200/api"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+ignore = []
+
+[tool.setuptools.packages.find]
+where = ["src"]

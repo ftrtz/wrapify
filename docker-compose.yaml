@@ -1,0 +1,61 @@
+services:
+  # PostgreSQL database (optional - for local development)
+  postgres:
+    image: postgres:17
+    container_name: wrapify-postgres
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-db_user}
+      - POSTGRES_PASSWORD=${POSTGRES_SECRET:-db_password}
+      - POSTGRES_DB=${DB_NAME:-spotify}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d ${DB_NAME:-spotify} -U ${POSTGRES_USER:-db_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Analytics API
+  api:
+    container_name: wrapify-api
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-db_user}
+      - POSTGRES_SECRET=${POSTGRES_SECRET:-db_password}
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-spotify}
+      - DB_SCHEMA=${DB_SCHEMA:-prod}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Streamlit Dashboard
+  web:
+    container_name: wrapify-dashboard
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+    ports:
+      - "8501:8501"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-db_user}
+      - POSTGRES_SECRET=${POSTGRES_SECRET:-db_password}
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-spotify}
+      - DB_SCHEMA=${DB_SCHEMA:-prod}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
