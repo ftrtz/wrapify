@@ -1,5 +1,5 @@
 services:
-  # PostgreSQL database (optional - for local development)
+  # PostgreSQL database
   postgres:
     image: postgres:17
     container_name: wrapify-postgres
@@ -25,7 +25,7 @@ services:
       context: .
       dockerfile: docker/api.Dockerfile
     ports:
-      - "${PORT:-8000}:8000"
+      - "${API_PORT:-8000}:8000"
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-db_user}
       - POSTGRES_SECRET=${POSTGRES_SECRET:-db_password}
@@ -45,7 +45,7 @@ services:
       context: .
       dockerfile: docker/web.Dockerfile
     ports:
-      - "8501:8501"
+      - "${STREAMLIT_PORT:-8501}:8501"
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-db_user}
       - POSTGRES_SECRET=${POSTGRES_SECRET:-db_password}

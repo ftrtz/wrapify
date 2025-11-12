@@ -2,8 +2,6 @@
 
 **Spotify listening analytics platform with ETL pipeline, analytics API, and interactive dashboard**
 
-Wrapify is a unified monorepo that extracts your Spotify listening history, analyzes it, and presents beautiful visualizations through an interactive dashboard. It consists of three main services:
-
 - **ETL Pipeline**: Automated data extraction from Spotify API with Prefect orchestration
 - **Analytics API**: FastAPI service for querying listening statistics
 - **Web Dashboard**: Interactive Streamlit dashboard with visualizations
@@ -15,7 +13,6 @@ Wrapify is a unified monorepo that extracts your Spotify listening history, anal
 - 🎨 **Interactive Dashboard**: Beautiful visualizations with Streamlit and Altair
 - 🔄 **Workflow Orchestration**: Prefect-powered ETL with monitoring and scheduling
 - 🐳 **Docker Ready**: Multi-service Docker Compose setup for easy deployment
-- 🧪 **Well Tested**: Comprehensive test suite with pytest
 
 ## Quick Start
 
@@ -23,28 +20,21 @@ Wrapify is a unified monorepo that extracts your Spotify listening history, anal
 
 - Python 3.13+
 - [uv](https://docs.astral.sh/uv/) for dependency management
-- PostgreSQL database
 - Spotify Developer Account ([register here](https://developer.spotify.com/dashboard))
 
 ### Installation
 
-1. **Clone the repository:**
-   ```bash
-   git clone <your-repo-url>
-   cd wrapify
-   ```
-
-2. **Install dependencies:**
+1. **Install dependencies:**
    ```bash
    uv sync
    ```
 
-3. **Set up Spotify API:**
+2. **Set up Spotify API:**
    - Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
    - Create an app to get your Client ID and Client Secret
    - Set a Redirect URI (e.g., `http://localhost:8888/callback`)
 
-4. **Configure environment variables:**
+3. **Configure environment variables:**
 
    Environment variables are managed through Docker Compose. You can either:
    - Set them in your shell environment before running `docker compose`
@@ -57,7 +47,7 @@ Wrapify is a unified monorepo that extracts your Spotify listening history, anal
    SPOTIPY_CLIENT_SECRET=your_client_secret_here
    SPOTIPY_REDIRECT_URI=http://localhost:8888/callback
 
-   # PostgreSQL configuration (use defaults for docker compose)
+   # PostgreSQL configuration
    POSTGRES_USER=db_user
    POSTGRES_SECRET=db_password
    DB_HOST=postgres  # or localhost for local development
@@ -65,7 +55,7 @@ Wrapify is a unified monorepo that extracts your Spotify listening history, anal
    DB_NAME=spotify
    ```
 
-5. **Set up Prefect blocks** (required for ETL):
+4. **Set up Prefect blocks** (required for ETL):
    ```bash
    prefect server start  # In a separate terminal
    uv run python -m etl.prefect_blocks.create_blocks
@@ -111,12 +101,6 @@ Run all services with Docker Compose:
 ```bash
 # Start API and Dashboard
 docker compose up
-
-# Include ETL service (uses profile)
-docker compose --profile etl up etl
-
-# Include local PostgreSQL database
-docker compose up postgres api web
 ```
 
 ## Project Structure
@@ -177,19 +161,6 @@ uv run pytest --cov=src
 uv run pytest tests/test_extract_recently_played.py -v
 ```
 
-### Code Quality
-
-```bash
-# Format code
-uv run ruff format .
-
-# Lint code
-uv run ruff check .
-
-# Fix linting issues
-uv run ruff check --fix .
-```
-
 ### Prefect Deployment
 
 For production deployments with scheduling:
@@ -201,30 +172,6 @@ prefect deploy
 # Set up automation to trigger analytics after ETL completes
 # (Configure in Prefect UI using the 'new-data' event)
 ```
-
-## Configuration
-
-All configuration is managed through environment variables defined in `docker-compose.yaml`:
-
-- **Spotify API**: `SPOTIPY_CLIENT_ID`, `SPOTIPY_CLIENT_SECRET`, `SPOTIPY_REDIRECT_URI`
-- **PostgreSQL**: `POSTGRES_USER`, `POSTGRES_SECRET`, `DB_HOST`, `DB_PORT`, `DB_NAME`
-- **API**: `PORT` (optional, defaults to 8000)
-
-For local development without Docker, export these variables in your shell or create a `.env` file.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature-name`
-3. Make your changes and add tests
-4. Run tests and linting: `uv run pytest && uv run ruff check .`
-5. Commit your changes: `git commit -am 'Add feature'`
-6. Push to the branch: `git push origin feature-name`
-7. Submit a pull request
-
-## License
-
-MIT License - see LICENSE file for details
 
 ## Acknowledgments
 
