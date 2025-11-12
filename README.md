@@ -63,7 +63,6 @@ Wrapify is a unified monorepo that extracts your Spotify listening history, anal
    DB_HOST=postgres  # or localhost for local development
    DB_PORT=5432
    DB_NAME=spotify
-   DB_SCHEMA=prod
    ```
 
 5. **Set up Prefect blocks** (required for ETL):
@@ -208,7 +207,7 @@ prefect deploy
 All configuration is managed through environment variables defined in `docker-compose.yaml`:
 
 - **Spotify API**: `SPOTIPY_CLIENT_ID`, `SPOTIPY_CLIENT_SECRET`, `SPOTIPY_REDIRECT_URI`
-- **PostgreSQL**: `POSTGRES_USER`, `POSTGRES_SECRET`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_SCHEMA`
+- **PostgreSQL**: `POSTGRES_USER`, `POSTGRES_SECRET`, `DB_HOST`, `DB_PORT`, `DB_NAME`
 - **API**: `PORT` (optional, defaults to 8000)
 
 For local development without Docker, export these variables in your shell or create a `.env` file.

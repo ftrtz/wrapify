@@ -19,7 +19,7 @@ uv sync
 # Set up environment variables
 # Either export them in your shell or create a .env file that docker-compose will load
 # Required: SPOTIPY_CLIENT_ID, SPOTIPY_CLIENT_SECRET, SPOTIPY_REDIRECT_URI
-# And PostgreSQL config: POSTGRES_USER, POSTGRES_SECRET, DB_HOST, DB_PORT, DB_NAME, DB_SCHEMA
+# And PostgreSQL config: POSTGRES_USER, POSTGRES_SECRET, DB_HOST, DB_PORT, DB_NAME
 
 # Start Prefect server (required for ETL)
 prefect server start

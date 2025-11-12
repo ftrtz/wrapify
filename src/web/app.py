@@ -15,7 +15,7 @@ st.set_page_config(layout="wide")
 
 # ========== DATABASE CONNECTION
 db_url = f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_SECRET')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
-db_schema = os.getenv("DB_SCHEMA")
+db_schema = "prod"
 
 # ========== LOAD DATA
 played_raw = load_played_joined(db_url, db_schema)

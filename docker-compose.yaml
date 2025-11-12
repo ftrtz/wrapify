@@ -20,6 +20,7 @@ services:
   # FastAPI Analytics API
   api:
     container_name: wrapify-api
+    image: ftrtz/wrapify-api:latest
     build:
       context: .
       dockerfile: docker/api.Dockerfile
@@ -31,7 +32,6 @@ services:
       - DB_HOST=${DB_HOST:-postgres}
       - DB_PORT=${DB_PORT:-5432}
       - DB_NAME=${DB_NAME:-spotify}
-      - DB_SCHEMA=${DB_SCHEMA:-prod}
     depends_on:
       postgres:
         condition: service_healthy
@@ -40,6 +40,7 @@ services:
   # Streamlit Dashboard
   web:
     container_name: wrapify-dashboard
+    image: ftrtz/wrapify-dashboard:latest
     build:
       context: .
       dockerfile: docker/web.Dockerfile
@@ -51,7 +52,6 @@ services:
       - DB_HOST=${DB_HOST:-postgres}
       - DB_PORT=${DB_PORT:-5432}
       - DB_NAME=${DB_NAME:-spotify}
-      - DB_SCHEMA=${DB_SCHEMA:-prod}
     depends_on:
       postgres:
         condition: service_healthy
