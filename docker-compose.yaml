@@ -16,14 +16,16 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   # FastAPI Analytics API
   api:
     container_name: wrapify-api
     image: ftrtz/wrapify-api:latest
-    build:
-      context: .
-      dockerfile: docker/api.Dockerfile
+    # Uncomment these lines to build the image locally
+#    build:
+#      context: .
+#      dockerfile: docker/api.Dockerfile
     ports:
       - "${API_PORT:-8000}:8000"
     environment:
@@ -41,9 +43,10 @@ services:
   web:
     container_name: wrapify-dashboard
     image: ftrtz/wrapify-dashboard:latest
-    build:
-      context: .
-      dockerfile: docker/web.Dockerfile
+    # Uncomment these lines to build the image locally
+#    build:
+#      context: .
+#      dockerfile: docker/web.Dockerfile
     ports:
       - "${STREAMLIT_PORT:-8501}:8501"
     environment:
