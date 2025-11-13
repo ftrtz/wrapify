@@ -18,9 +18,6 @@ pull:
     id: clone-step
     repository: https://github.com/ftrtz/wrapify
     branch: main
-- prefect.deployments.steps.run_shell_script:
-    script: pip install -e {{ clone-step.directory }}
-    stream_output: true
 
 # the deployments section allows you to provide configuration for deploying flows
 deployments:
