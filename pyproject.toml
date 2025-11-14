@@ -33,7 +33,7 @@ dev = [
 ]
 
 [tool.prefect]
-api.url = "http://your-prefect-server/api"
+api.url = "http://prefect-server:4200/api"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

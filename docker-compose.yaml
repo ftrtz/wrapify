@@ -71,7 +71,7 @@ services:
     ports:
       - "${ETL_HEALTH_PORT:-8080}:8080"
     environment:
-      - PREFECT_API_URL=${PREFECT_API_URL:-http://your-prefect-server/api}
+      - PREFECT_API_URL=${PREFECT_API_URL:-http://prefect-server:4200/api}
     depends_on:
       postgres:
         condition: service_healthy
