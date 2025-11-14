@@ -60,5 +60,28 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # ETL Service (Prefect flows in serve mode)
+  etl:
+    container_name: wrapify-etl
+    image: ftrtz/wrapify-etl:latest
+    # Uncomment these lines to build the image locally
+#    build:
+#      context: .
+#      dockerfile: docker/etl.Dockerfile
+    ports:
+      - "${ETL_HEALTH_PORT:-8080}:8080"
+    environment:
+      - PREFECT_API_URL=${PREFECT_API_URL:-http://your-prefect-server/api}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request as u; u.urlopen('http://localhost:8080/health', timeout=1)\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
 volumes:
   postgres_data:

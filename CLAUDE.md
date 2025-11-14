@@ -29,12 +29,17 @@ uv run python -m etl.prefect_blocks.create_blocks
 ```
 
 ### Running Services
+
+#### Local Development (Direct Execution)
 ```bash
-# ETL pipeline (extract Spotify data)
+# Run ETL flow once (for testing)
 uv run python -m etl.flow
 
-# Analytics calculation (after ETL completes)
+# Run analytics flow once (for testing)
 uv run python -m etl.analytics.flow
+
+# Serve both flows (long-running process that listens for scheduled/triggered runs)
+uv run python -m etl.serve
 
 # API server
 uv run uvicorn api.main:app --reload
@@ -66,21 +71,45 @@ uv run ruff check --fix .
 
 ### Docker
 ```bash
-# Start API and dashboard (uses external DB)
+# Start all services (API, dashboard, ETL, and PostgreSQL)
 docker compose up
 
-# Include PostgreSQL database
-docker compose up postgres api web
+# Start specific services
+docker compose up postgres api web etl
 
-# Run ETL (uses profile)
-docker compose --profile etl up etl
+# Start just the ETL container (serves flows in long-running mode)
+docker compose up etl
+
+# View logs
+docker compose logs -f etl
+
+# Check ETL container health
+curl http://localhost:8080/health
 ```
 
 ### Prefect Deployment
+
+The project uses **container-based serve deployments** instead of work pools:
+
 ```bash
-# Deploy flows to Prefect server/cloud
-prefect deploy
+# Local: Serve flows in a long-running process (for development/testing)
+uv run python -m etl.serve
+
+# Production: Run the ETL container which serves flows automatically
+docker compose up etl
+
+# The container registers deployments with Prefect and listens for:
+# - Scheduled runs (ETL runs hourly via cron)
+# - Manual triggers from Prefect UI
+# - Event-based triggers (analytics triggered by "new-data" event)
 ```
+
+**Key differences from work pool deployments:**
+- No `prefect deploy` command needed
+- No work pool or worker required
+- Flows served directly from container using `.serve()` method
+- Container runs continuously, polling Prefect API for scheduled/triggered runs
+- Simpler deployment model with fewer moving parts
 
 ## Architecture
 
@@ -108,6 +137,16 @@ The `analytics_flow` recalculates statistics (currently full recalculation, not 
 - **calc_artist_monthly**: Aggregates monthly listening statistics per artist
 
 Can be automated to run after ETL via Prefect automation triggered by "new-data" event.
+
+### Serve Deployment (`src/etl/serve.py`)
+
+The serve script creates and serves both flow deployments in a single long-running process:
+- Uses Prefect's `.serve()` method to register deployments and listen for work
+- **spotify-etl deployment**: Scheduled hourly (cron: `0 * * * *`, CET timezone)
+- **analytics-flow deployment**: Triggered manually or via automation
+- Runs in Docker container with health monitoring on port 8080
+- Container automatically reconnects to Prefect server on restart
+- No work pools or workers needed - flows execute directly in the container
 
 ### Database Schemas
 
@@ -150,8 +189,9 @@ The API (`src/api/main.py`) constructs the DATABASE_URL from individual environm
 ### Module Imports
 
 Use module-style imports when running with `uv run`:
-- ETL: `python -m etl.flow`
-- Analytics: `python -m etl.analytics.flow`
+- ETL (single run): `python -m etl.flow`
+- Analytics (single run): `python -m etl.analytics.flow`
+- ETL + Analytics (serve mode): `python -m etl.serve`
 - API: `uvicorn api.main:app`
 - Dashboard: `streamlit run src/web/app.py`
 
@@ -193,8 +233,13 @@ When modifying the dashboard:
 
 ## Important Notes
 
-- The ETL pipeline emits a "new-data" event after successful runs to trigger analytics flow via Prefect automation
-- The `prefect.yaml` file defines two deployments: `spotify-etl` (hourly cron) and `analytics-flow` (event-triggered)
-- Work pool name in `prefect.yaml` is currently set to "dongbin-work-pool" - update for your environment
-- Tests use pytest without fixtures currently - sample data is constructed inline
-- All services require PostgreSQL connection - use Docker Compose postgres service or external DB
+- **Container-Based Deployments**: Flows are served from a long-lived Docker container using Prefect's `.serve()` method
+- **No Work Pools Required**: The ETL container runs flows directly without needing work pools or workers
+- **Deployment Configuration**: Both flows are configured in `src/etl/serve.py` with schedules and event triggers
+- **ETL Schedule**: The `spotify_etl` flow runs hourly (cron: `0 * * * *`, timezone: CET)
+- **Analytics Trigger**: The `analytics_flow` can be triggered manually or via Prefect automation on "new-data" event
+- **Event Emission**: ETL pipeline emits "new-data" event after successful runs to trigger analytics
+- **Health Monitoring**: ETL container exposes health endpoint at `http://localhost:8080/health`
+- **Tests**: Use pytest without fixtures currently - sample data is constructed inline
+- **Database**: All services require PostgreSQL connection - use Docker Compose postgres service or external DB
+- **Legacy Files**: `prefect.yaml.backup-workpool-deployment` contains the old work pool deployment config (archived)

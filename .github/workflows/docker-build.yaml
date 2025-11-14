@@ -17,7 +17,7 @@ jobs:
 
     strategy:
       matrix:
-        service: [api, web]
+        service: [api, web, etl]
         include:
           - service: api
             dockerfile: docker/api.Dockerfile
@@ -25,6 +25,9 @@ jobs:
           - service: web
             dockerfile: docker/web.Dockerfile
             image: ftrtz/wrapify-dashboard
+          - service: etl
+            dockerfile: docker/etl.Dockerfile
+            image: ftrtz/wrapify-etl
 
     steps:
       - name: Check out the repo
