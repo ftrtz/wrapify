@@ -1,5 +1,4 @@
 from prefect import flow, task, get_run_logger
-from prefect.events import emit_event
 from prefect.blocks.system import Secret
 from prefect_sqlalchemy import SqlAlchemyConnector
 from spotipy.oauth2 import SpotifyOAuth
@@ -228,7 +227,6 @@ def spotify_etl():
         load_tables()
         insert_prod()
         cleanup()
-        emit_event(event="new-data", resource={"prefect.resource.id": "spotify-etl.data"})
 
     else:
         # optional: log that nothing else will run

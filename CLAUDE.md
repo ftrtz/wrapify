@@ -101,7 +101,7 @@ docker compose up etl
 # The container registers deployments with Prefect and listens for:
 # - Scheduled runs (ETL runs hourly via cron)
 # - Manual triggers from Prefect UI
-# - Event-based triggers (analytics triggered by "new-data" event)
+# - Automated analytics triggering (via task completion events)
 ```
 
 **Key differences from work pool deployments:**
@@ -109,6 +109,7 @@ docker compose up etl
 - No work pool or worker required
 - Flows served directly from container using `.serve()` method
 - Container runs continuously, polling Prefect API for scheduled/triggered runs
+- Automation setup is integrated and automatic
 - Simpler deployment model with fewer moving parts
 
 ## Architecture
@@ -124,11 +125,12 @@ The `spotify_etl` flow follows these steps:
    - **transform_track**: Cleans data, creates track-artist relationships, finalizes schemas
    - **extract_artist**: Fetches full artist metadata from Spotify (genres, followers, images)
    - **load_tables**: Loads CSVs into staging schema
-   - **insert_prod**: Upserts from staging into production schema
+   - **insert_prod**: Upserts from staging into production schema (triggers analytics via automation)
    - **cleanup**: Removes temporary CSV files
-   - **emit_event**: Emits "new-data" event to trigger analytics flow
 
 All data flows through CSV intermediates in `src/etl/data/` before loading to database.
+
+The analytics flow is automatically triggered when the `insert_prod` task completes successfully via a Prefect automation.
 
 ### Analytics Flow (`src/etl/analytics/flow.py`)
 
@@ -136,17 +138,22 @@ The `analytics_flow` recalculates statistics (currently full recalculation, not 
 - **reset_stats_tables**: Drops and recreates stats schema tables
 - **calc_artist_monthly**: Aggregates monthly listening statistics per artist
 
-Can be automated to run after ETL via Prefect automation triggered by "new-data" event.
+This flow is automatically triggered by a Prefect automation when the `insert_prod` task completes, ensuring analytics are calculated immediately after new data is loaded.
 
 ### Serve Deployment (`src/etl/serve.py`)
 
-The serve script creates and serves both flow deployments in a single long-running process:
+The serve script creates deployments, sets up automation, and serves both flows in a single long-running process:
 - Uses Prefect's `.serve()` method to register deployments and listen for work
-- **spotify-etl deployment**: Scheduled hourly (cron: `0 * * * *`, CET timezone)
-- **analytics-flow deployment**: Triggered manually or via automation
+- **spotify-etl deployment**: Scheduled hourly (cron: `0 * * * *`)
+- **analytics-flow deployment**: Triggered automatically via Prefect automation
+- **Automation setup**: Automatically creates automation that triggers analytics when `insert_prod` task completes
+  - Uses wildcard matching (`insert_prod*`) to match task names with random suffixes
+  - Only triggers when new data is available (insert_prod only runs when there's new data)
 - Runs in Docker container with health monitoring on port 8080
 - Container automatically reconnects to Prefect server on restart
 - No work pools or workers needed - flows execute directly in the container
+
+The automation ensures analytics are calculated only when new data is loaded, avoiding unnecessary recalculations.
 
 ### Database Schemas
 
@@ -235,10 +242,13 @@ When modifying the dashboard:
 
 - **Container-Based Deployments**: Flows are served from a long-lived Docker container using Prefect's `.serve()` method
 - **No Work Pools Required**: The ETL container runs flows directly without needing work pools or workers
-- **Deployment Configuration**: Both flows are configured in `src/etl/serve.py` with schedules and event triggers
-- **ETL Schedule**: The `spotify_etl` flow runs hourly (cron: `0 * * * *`, timezone: CET)
-- **Analytics Trigger**: The `analytics_flow` can be triggered manually or via Prefect automation on "new-data" event
-- **Event Emission**: ETL pipeline emits "new-data" event after successful runs to trigger analytics
+- **Deployment Configuration**: Both flows are configured in `src/etl/serve.py` with schedules and automation
+- **ETL Schedule**: The `spotify_etl` flow runs hourly (cron: `0 * * * *`)
+- **Automated Analytics**: The `analytics_flow` is automatically triggered when the `insert_prod` task completes
+  - Automation is set up automatically by `serve.py` on startup
+  - Uses task event matching with wildcards (`insert_prod*`) to handle Prefect's random task name suffixes
+  - Only triggers when new data is available (conditional execution in ETL flow)
+- **Manual Automation Setup**: If automation fails to create automatically, run `uv run python -m etl.setup_automation` manually
 - **Health Monitoring**: ETL container exposes health endpoint at `http://localhost:8080/health`
 - **Tests**: Use pytest without fixtures currently - sample data is constructed inline
 - **Database**: All services require PostgreSQL connection - use Docker Compose postgres service or external DB

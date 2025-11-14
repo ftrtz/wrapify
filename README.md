@@ -163,15 +163,17 @@ uv run pytest tests/test_extract_recently_played.py -v
 
 ### Prefect Deployment
 
-For production deployments with scheduling:
+The project uses container-based serve deployments with automatic analytics triggering:
 
 ```bash
-# Deploy flows to Prefect server/cloud
-prefect deploy
+# Serve flows (registers deployments and sets up automation automatically)
+uv run python -m etl.serve
 
-# Set up automation to trigger analytics after ETL completes
-# (Configure in Prefect UI using the 'new-data' event)
+# Or with Docker
+docker compose up etl
 ```
+
+The automation is configured automatically when `serve.py` starts and triggers the analytics flow whenever the `insert_prod` task completes successfully (i.e., when new data is available).
 
 ## Acknowledgments
 
