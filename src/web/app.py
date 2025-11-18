@@ -10,6 +10,10 @@ import os
 from web.load_tables import load_played_joined, load_artist, load_track, load_audio_features
 from web.transform_tables import get_top_artists_played, get_top_tracks_played
 
+# for local development
+# from dotenv import load_dotenv
+# load_dotenv()
+
 # ========== STREAMLIT CONFIG
 st.set_page_config(layout="wide")
 
@@ -189,7 +193,7 @@ else:
                 "followers",
             ],
             hide_index=True,
-            use_container_width=True,
+            width="stretch",
             on_select="rerun",
             selection_mode="single-row",
         )
@@ -252,7 +256,7 @@ else:
                         ),
                     )
                     .properties(height=180),
-                    use_container_width=True,
+                    width="stretch",
                 )
 
         with spot3:
@@ -274,7 +278,7 @@ else:
                 },
                 column_order=["count", "image", "track"],
                 hide_index=True,
-                use_container_width=True,
+                width="stretch",
                 height=260,
             )
 
@@ -317,7 +321,7 @@ else:
                 "spotify_uri",
             ],
             hide_index=True,
-            use_container_width=True,
+            width="stretch",
             on_select="rerun",
             selection_mode="single-row",
         )
@@ -370,7 +374,7 @@ else:
                         y=alt.Y("cumsum", axis=alt.Axis(title=None, tickMinStep=1)),
                     )
                     .properties(height=200),
-                    use_container_width=True,
+                    width="stretch",
                 )
 
         with spot3:
@@ -408,7 +412,7 @@ else:
                         ),
                     },
                     hide_index=True,
-                    use_container_width=True,
+                    width="stretch",
                     height=282,
                 )
 
@@ -475,7 +479,7 @@ else:
                     )
                     .add_params(selector)
                     .properties(height=300),
-                    use_container_width=True,
+                    width="stretch",
                     on_select="rerun",
                 )
                 # TODO: follower histogram should be log scale
@@ -506,7 +510,7 @@ else:
                         "uri": None,
                     },
                     hide_index=True,
-                    use_container_width=True,
+                    width="stretch",
                     column_order=[selected_metric, "image", "name"],
                     height=300,
                 )
@@ -575,7 +579,7 @@ else:
                     )
                     .add_params(selector)
                     .properties(height=300),
-                    use_container_width=True,
+                    width="stretch",
                     on_select="rerun",
                 )
 
@@ -606,7 +610,7 @@ else:
                         "uri": None,
                     },
                     hide_index=True,
-                    use_container_width=True,
+                    width="stretch",
                     column_order=[selected_metric, "image", "track", "artist"],
                     height=300,
                 )
@@ -642,5 +646,5 @@ else:
                 "spotify_uri",
             ],
             hide_index=True,
-            use_container_width=True,
+            width="stretch",
         )

@@ -30,10 +30,11 @@ dev = [
     "pytest>=8.4.1",
     "ruff>=0.12.4",
     "notebook>=7.4.4",
+    "python-dotenv>=1.2.1",
 ]
 
 [tool.prefect]
-api.url = "http://prefect-server:4200/api"
+api.url = "https://prefect.horai.top/api"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
