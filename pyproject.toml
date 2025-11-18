@@ -47,6 +47,7 @@ dev = [
     "pytest>=8.4.1",
     "ruff>=0.12.4",
     "notebook>=7.4.4",
+    "python-dotenv>=1.2.1",
 ]
 
 [tool.prefect]
