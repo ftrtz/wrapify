@@ -1,18 +1,27 @@
 from datetime import timedelta, date
+import calendar
 
 import streamlit as st
 from streamlit_extras.mandatory_date_range import date_range_picker
+from streamlit_extras.card import card
 from annotated_text import annotated_text
 import altair as alt
 import polars as pl
 import os
 
-from web.load_tables import load_played_joined, load_artist, load_track, load_audio_features
+from web.load_tables import (
+    load_played_joined,
+    load_artist,
+    load_track,
+    load_audio_features,
+    load_artist_monthly,
+)
 from web.transform_tables import get_top_artists_played, get_top_tracks_played
 
 # for local development
-# from dotenv import load_dotenv
-# load_dotenv()
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ========== STREAMLIT CONFIG
 st.set_page_config(layout="wide")
@@ -140,9 +149,7 @@ else:
             st.metric(label="Different genres", value=genres_count)
     with c4:
         with st.container(height=125, border=True):
-            st.metric(
-                label="Different tracks", value=played.unique("track_id").shape[0]
-            )
+            st.metric(label="Different tracks", value=played.unique("track_id").shape[0])
     with c5:
         with st.container(height=125, border=True):
             avg_pop = played.unique("track_id")["popularity"].mean()
@@ -152,7 +159,120 @@ else:
                 delta=round(avg_pop - track["popularity"].mean(), 2),
             )
 
-    t1, t2, t3 = st.tabs(["Favorites", "Metrics", "Recently Played"])
+    t0, t1, t2, t3 = st.tabs(["MONTHLY", "Favorites", "Metrics", "Recently Played"])
+
+    # ---------------------------------------- TAB 0: MONTHLY ----------------------------------------
+    with t0:
+        st.header("Top Artist by Month")
+
+        artist_monthly = load_artist_monthly(db_url, db_schema)
+
+        selected_year = st.selectbox(
+            "",
+            options=artist_monthly["year_played"].unique().sort(descending=True).to_list(),
+            placeholder="Select Year",
+        )
+
+        # Filter data for selected year
+        year_data = artist_monthly.filter(pl.col("year_played") == selected_year)
+
+        # Calculate total minutes per month
+        monthly_totals = year_data.group_by("month_played").agg(
+            pl.col("min_listened").sum().alias("min_total")
+        )
+
+        # Get top artist per month (highest min_listened)
+        top_artist_per_month = (
+            year_data.sort("min_listened", descending=True)
+            .group_by("month_played")
+            .first()
+            .join(monthly_totals, on="month_played")
+            .with_columns(
+                (pl.col("min_total") - pl.col("min_listened")).alias("min_others"),
+                pl.col("month_played")
+                .map_elements(lambda x: calendar.month_name[1:][x - 1], return_dtype=pl.Utf8)
+                .alias("month_name"),
+            )
+            .sort("month_played")
+        )
+
+        def chart_gradient(df, y_column, color_rgb):
+            chart = (
+                alt.Chart(df)
+                .mark_area(
+                    line={"color": f"rgba({color_rgb}, 1)"},
+                    color=alt.Gradient(
+                        gradient="linear",
+                        stops=[
+                            alt.GradientStop(color=f"rgba({color_rgb}, 0)", offset=0),
+                            alt.GradientStop(color=f"rgba({color_rgb}, 0.7)", offset=1),
+                        ],
+                        x1=1,
+                        x2=1,
+                        y1=1,
+                        y2=0,
+                    ),
+                )
+                .encode(
+                    alt.X(
+                        "month_played:O",
+                        title=None,
+                        axis=alt.Axis(
+                            labelExpr=f"{calendar.month_name[1:]}[datum.value-1]", labelAngle=0
+                        ),
+                    ),
+                    alt.Y(
+                        f"{y_column}:Q",
+                        title=None,
+                        axis=alt.Axis(grid=False, labels=False, ticks=False),
+                    ),
+                    tooltip=[
+                        alt.Tooltip("month_name:O", title="Month"),
+                        alt.Tooltip("name:O", title="Top Artist"),
+                        alt.Tooltip("min_listened:Q", title="Min listened", format=",d"),
+                        alt.Tooltip("min_total:Q", title="Total min listened", format=",d"),
+                    ],
+                )
+            )
+            return chart
+
+        chart = alt.layer(
+            chart_gradient(top_artist_per_month, "min_total", "83, 83, 83"),
+            chart_gradient(top_artist_per_month, "min_listened", "29, 185, 84"),
+        )
+        st.altair_chart(chart, width="stretch")
+
+        # -------- MONTHLY CARDS
+
+        # Define card
+        def card_1(month_data):
+            card(
+                title=month_data["name"],  # calendar.month_name[month],
+                text=str(month_data["min_listened"]) + " min listened",
+                image=month_data["image"],
+                styles={
+                    "card": {
+                        "margin": "0",
+                        "width": "100%",  # <- make the card use the width of its container, note that it will not resize the height of the card automatically
+                        # "height": "250px",
+                    }
+                },
+            )
+
+        # Create card grid
+        months_in_data = (
+            top_artist_per_month["month_played"].unique().sort(descending=False).to_list()
+        )
+
+        cols = st.columns(len(months_in_data))
+
+        for col_idx, month in enumerate(months_in_data):
+            month_data = top_artist_per_month.filter(pl.col("month_played") == month).row(
+                0, named=True
+            )
+
+            with cols[col_idx]:
+                card_1(month_data)
 
     # ---------------------------------------- TAB 1: FAVORITES ----------------------------------------
     with t1:
@@ -208,9 +328,7 @@ else:
         # --- Selected Artist Spotlight
         with spot1:
             # Image
-            annotated_text(
-                (f"#{selected_artist['rank']}", f"{selected_artist['name']}")
-            )
+            annotated_text((f"#{selected_artist['rank']}", f"{selected_artist['name']}"))
 
             st.markdown(
                 f"""
@@ -232,17 +350,13 @@ else:
             with st.container(height=260, border=True):
                 st.caption("Cumulative Time Listened (min)")
                 selected_cum_time = (
-                    played.filter(
-                        pl.col("main_artist_id") == selected_artist["main_artist_id"]
-                    )
+                    played.filter(pl.col("main_artist_id") == selected_artist["main_artist_id"])
                     .with_columns(
                         [
                             (pl.col("duration_ms") / 60000).alias("duration_min"),
                         ]
                     )
-                    .with_columns(
-                        [pl.col("duration_min").cum_sum().alias("duration_min_cumsum")]
-                    )
+                    .with_columns([pl.col("duration_min").cum_sum().alias("duration_min_cumsum")])
                 )
 
                 st.altair_chart(
@@ -262,9 +376,7 @@ else:
         with spot3:
             # Most Played Tracks
             selected_artist_tracks = (
-                played.filter(
-                    pl.col("main_artist_id") == selected_artist["main_artist_id"]
-                )
+                played.filter(pl.col("main_artist_id") == selected_artist["main_artist_id"])
                 .group_by("image", "track")
                 .len("count")
                 .sort(by="count", descending=True)
@@ -379,13 +491,9 @@ else:
 
         with spot3:
             # Audio Features
-            selected_af = audio_features.filter(
-                pl.col("track_id") == selected_track["track_id"]
-            )
+            selected_af = audio_features.filter(pl.col("track_id") == selected_track["track_id"])
             if selected_af.shape[0] == 0:
-                st.info(
-                    "Audio Features are deprecated and aren't retrieved since November 2024."
-                )
+                st.info("Audio Features are deprecated and aren't retrieved since November 2024.")
 
             else:
                 selected_af_pivoted = selected_af.unpivot(
@@ -420,9 +528,7 @@ else:
         st.header("Most Popular Genres")
 
         # Extract top 10 genres as list of tuples
-        top_genres = (
-            all_genres.select(["genres", "count"]).head(10).iter_rows(named=False)
-        )
+        top_genres = all_genres.select(["genres", "count"]).head(10).iter_rows(named=False)
 
         # Build the converted list for annotated_text
         top_genres_converted = []
@@ -522,9 +628,7 @@ else:
 
         with st.container(border=True):
             # merge all played tracks with audio features
-            p_select = played.select(
-                "track_id", "track", "artist", "popularity", "image"
-            ).unique()
+            p_select = played.select("track_id", "track", "artist", "popularity", "image").unique()
             track_full = p_select.join(audio_features, on="track_id", how="left")
 
             selected_metric = st.selectbox(

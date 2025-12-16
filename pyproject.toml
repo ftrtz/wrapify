@@ -20,9 +20,9 @@ dependencies = [
     # Dashboard dependencies
     "polars>=1.31.0",
     "connectorx>=0.4.4",
-    "streamlit>=1.47.0",
     "streamlit-extras>=0.7.5",
     "prefect[sqlalchemy]>=3.6.2",
+    "streamlit>=1.52.0",
 ]
 
 [dependency-groups]
