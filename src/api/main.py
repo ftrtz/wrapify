@@ -16,7 +16,9 @@ DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "spotify")
 
-DATABASE_URL = f"postgresql+psycopg2://{POSTGRES_USER}:{POSTGRES_SECRET}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+DATABASE_URL = (
+    f"postgresql+psycopg2://{POSTGRES_USER}:{POSTGRES_SECRET}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+)
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -59,9 +61,9 @@ def get_top_artist(
         "artist_id": result.artist_id,
         "name": result.name,
         "image": result.image,
-        "min_listened": int(result.min_listened)
+        "min_listened": int(result.min_listened),
     }
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     uvicorn.run(app=app, host="0.0.0.0", port=8000)
