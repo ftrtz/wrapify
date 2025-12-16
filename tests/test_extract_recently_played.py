@@ -2,6 +2,7 @@ import pandas as pd
 import json
 from src.etl.utils import extract_recently_played
 
+
 def test_extract_recently_played():
     # Mock JSON response similar to the one returned by the Spotify API
     mock_response = {
@@ -15,7 +16,7 @@ def test_extract_recently_played():
                     "duration_ms": 180000,
                     "artists": [
                         {"id": "artist_1", "name": "Artist One"},
-                        {"id": "artist_2", "name": "Artist Two"}
+                        {"id": "artist_2", "name": "Artist Two"},
                     ],
                     "album": {
                         "id": "album_1",
@@ -23,11 +24,11 @@ def test_extract_recently_played():
                         "images": [
                             {"url": "image_1_url"},
                             {"url": "image_2_url"},
-                            {"url": "image_3_url"}
-                        ]
+                            {"url": "image_3_url"},
+                        ],
                     },
-                    "uri": "spotify:track:track_1"
-                }
+                    "uri": "spotify:track:track_1",
+                },
             },
             {
                 "played_at": "2023-11-01T14:54:27.000Z",
@@ -36,20 +37,15 @@ def test_extract_recently_played():
                     "name": "Track Two",
                     "popularity": 90,
                     "duration_ms": 200000,
-                    "artists": [
-                        {"id": "artist_3", "name": "Artist Three"}
-                    ],
+                    "artists": [{"id": "artist_3", "name": "Artist Three"}],
                     "album": {
                         "id": "album_2",
                         "name": "Album Two",
-                        "images": [
-                            {"url": "image_4_url"},
-                            {"url": "image_5_url"}
-                        ]
+                        "images": [{"url": "image_4_url"}, {"url": "image_5_url"}],
                     },
-                    "uri": "spotify:track:track_2"
-                }
-            }
+                    "uri": "spotify:track:track_2",
+                },
+            },
         ]
     }
 
@@ -65,9 +61,11 @@ def test_extract_recently_played():
         "artist_names": [["Artist One", "Artist Two"], ["Artist Three"]],
         "album_id": ["album_1", "album_2"],
         "album_name": ["Album One", "Album Two"],
-        "album_images": [json.dumps([{"url": "image_1_url"}, {"url": "image_2_url"}, {"url": "image_3_url"}]), 
-                         json.dumps([{"url": "image_4_url"}, {"url": "image_5_url"}])],
-        "track_uri": ["spotify:track:track_1", "spotify:track:track_2"]
+        "album_images": [
+            json.dumps([{"url": "image_1_url"}, {"url": "image_2_url"}, {"url": "image_3_url"}]),
+            json.dumps([{"url": "image_4_url"}, {"url": "image_5_url"}]),
+        ],
+        "track_uri": ["spotify:track:track_1", "spotify:track:track_2"],
     }
     expected_df = pd.DataFrame(expected_data)
 
@@ -75,5 +73,6 @@ def test_extract_recently_played():
     result_df = extract_recently_played(mock_response)
 
     # Assert that the DataFrame returned by the function matches the expected DataFrame
-    pd.testing.assert_frame_equal(result_df.reset_index(drop=True), expected_df.reset_index(drop=True))
-
+    pd.testing.assert_frame_equal(
+        result_df.reset_index(drop=True), expected_df.reset_index(drop=True)
+    )

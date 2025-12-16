@@ -38,7 +38,7 @@ def setup_automation():
         response = httpx.post(
             f"{PREFECT_API_URL.value()}/deployments/filter",
             json={"deployments": {"name": {"any_": ["analytics-flow"]}}, "limit": 1},
-            timeout=10.0
+            timeout=10.0,
         )
 
         if response.status_code != 200 or not (deployments := response.json()):

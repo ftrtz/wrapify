@@ -2,6 +2,7 @@ import pandas as pd
 import json
 from src.etl.utils import extract_artists
 
+
 def test_extract_artists():
     # Mock JSON response similar to the one returned by the Spotify API
     mock_response = {
@@ -13,10 +14,7 @@ def test_extract_artists():
                 "genres": ["pop", "rock"],
                 "popularity": 90,
                 "uri": "spotify:artist:artist_1",
-                "images": [
-                    {"url": "image_1_url"},
-                    {"url": "image_2_url"}
-                ]
+                "images": [{"url": "image_1_url"}, {"url": "image_2_url"}],
             },
             {
                 "id": "artist_2",
@@ -25,11 +23,8 @@ def test_extract_artists():
                 "genres": ["jazz", "blues"],
                 "popularity": 80,
                 "uri": "spotify:artist:artist_2",
-                "images": [
-                    {"url": "image_3_url"},
-                    {"url": "image_4_url"}
-                ]
-            }
+                "images": [{"url": "image_3_url"}, {"url": "image_4_url"}],
+            },
         ]
     }
 
@@ -43,8 +38,8 @@ def test_extract_artists():
         "uri": ["spotify:artist:artist_1", "spotify:artist:artist_2"],
         "images": [
             json.dumps([{"url": "image_1_url"}, {"url": "image_2_url"}]),
-            json.dumps([{"url": "image_3_url"}, {"url": "image_4_url"}])
-        ]
+            json.dumps([{"url": "image_3_url"}, {"url": "image_4_url"}]),
+        ],
     }
     expected_df = pd.DataFrame(expected_data)
 
@@ -52,5 +47,6 @@ def test_extract_artists():
     result_df = extract_artists(mock_response)
 
     # Assert that the DataFrame returned by the function matches the expected DataFrame
-    pd.testing.assert_frame_equal(result_df.reset_index(drop=True), expected_df.reset_index(drop=True))
-
+    pd.testing.assert_frame_equal(
+        result_df.reset_index(drop=True), expected_df.reset_index(drop=True)
+    )

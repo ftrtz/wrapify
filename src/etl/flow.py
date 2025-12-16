@@ -30,6 +30,7 @@ DATA_PATH = Path("src/etl/data")
 CACHE_PATH = Path("src/etl/.cache")
 SQL_PATH = Path("src/etl/sql")
 
+
 # ----------------------------------------------------------------------
 # Secrets & Auth setup (lazy loaded)
 # ----------------------------------------------------------------------
@@ -65,6 +66,7 @@ def get_spotify_client():
 # ----------------------------------------------------------------------
 # Tasks
 # ----------------------------------------------------------------------
+
 
 @task
 def create_db_tables():
@@ -177,8 +179,12 @@ def load_tables():
             csv_path = DATA_PATH / f"{tbl}.csv"
             if csv_path.exists():
                 csv_to_staging(
-                    engine, tbl, str(csv_path), str(sql_path),
-                    staging_schema=STAGING_SCHEMA, prod_schema=PROD_SCHEMA
+                    engine,
+                    tbl,
+                    str(csv_path),
+                    str(sql_path),
+                    staging_schema=STAGING_SCHEMA,
+                    prod_schema=PROD_SCHEMA,
                 )
                 logger.info(f"Loaded {tbl} into staging.")
             else:
@@ -196,8 +202,7 @@ def insert_prod():
         engine = db.get_engine()
         for tbl in tables:
             staging_to_prod(
-                engine, tbl, str(sql_path),
-                staging_schema=STAGING_SCHEMA, prod_schema=PROD_SCHEMA
+                engine, tbl, str(sql_path), staging_schema=STAGING_SCHEMA, prod_schema=PROD_SCHEMA
             )
             logger.info(f"Inserted {tbl} from staging to prod.")
 
@@ -214,6 +219,7 @@ def cleanup():
 # ----------------------------------------------------------------------
 # Flow
 # ----------------------------------------------------------------------
+
 
 @flow()
 def spotify_etl():

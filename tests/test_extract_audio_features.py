@@ -1,6 +1,7 @@
 import pandas as pd
 from src.etl.utils import extract_audio_features
 
+
 def test_extract_audio_features():
     # Mock JSON response similar to the one returned by the Spotify API
     mock_response = [
@@ -18,7 +19,7 @@ def test_extract_audio_features():
             "valence": 0.85,
             "tempo": 120.0,
             "time_signature": 4,
-            "analysis_url": "http://example.com/track_1_analysis"
+            "analysis_url": "http://example.com/track_1_analysis",
         },
         {
             "id": "track_2",
@@ -34,8 +35,8 @@ def test_extract_audio_features():
             "valence": 0.75,
             "tempo": 130.0,
             "time_signature": 4,
-            "analysis_url": "http://example.com/track_2_analysis"
-        }
+            "analysis_url": "http://example.com/track_2_analysis",
+        },
     ]
 
     # Expected DataFrame
@@ -55,8 +56,8 @@ def test_extract_audio_features():
         "time_signature": [4, 4],
         "analysis_url": [
             "http://example.com/track_1_analysis",
-            "http://example.com/track_2_analysis"
-        ]
+            "http://example.com/track_2_analysis",
+        ],
     }
     expected_df = pd.DataFrame(expected_data)
 
@@ -64,5 +65,6 @@ def test_extract_audio_features():
     result_df = extract_audio_features(mock_response)
 
     # Assert that the DataFrame returned by the function matches the expected DataFrame
-    pd.testing.assert_frame_equal(result_df.reset_index(drop=True), expected_df.reset_index(drop=True))
-
+    pd.testing.assert_frame_equal(
+        result_df.reset_index(drop=True), expected_df.reset_index(drop=True)
+    )

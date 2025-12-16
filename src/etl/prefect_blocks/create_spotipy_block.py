@@ -1,6 +1,7 @@
 from prefect.blocks.system import Secret
 import getpass
 
+
 def create_spotipy_block(block_name: str = "spotipy"):
     """
     Interactively create or update a Prefect Secret block for Spotipy credentials.
@@ -25,7 +26,9 @@ def create_spotipy_block(block_name: str = "spotipy"):
         pass
 
     # Spotipy credentials
-    print("Enter Spotipy credentials (from your Spotify Developer Dashboard - https://developer.spotify.com/):")
+    print(
+        "Enter Spotipy credentials (from your Spotify Developer Dashboard - https://developer.spotify.com/):"
+    )
     client_id = input("SPOTIPY_CLIENT_ID: ").strip()
     client_secret = getpass.getpass("SPOTIPY_CLIENT_SECRET: ").strip()
     redirect_uri = input("SPOTIPY_REDIRECT_URI: ").strip()
