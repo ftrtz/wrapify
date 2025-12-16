@@ -97,3 +97,31 @@ def load_audio_features(_db_url: str, db_schema: str) -> DataFrame:
     df = cx.read_sql(conn=_db_url, query=query, return_type="polars")
 
     return df
+
+
+@st.cache_data(ttl=3600)
+def load_artist_monthly(_db_url: str, db_schema: str) -> DataFrame:
+    """
+    Load monthly artist data from the database.
+
+    Parameters:
+    - _db_url (str): Database Connection URL
+
+    Returns:
+    - polars.DataFrame: DataFrame with audio features details.
+    """
+    query = f"""
+        select
+            artist_stats.year_played,
+            artist_stats.month_played,
+            artist_stats.artist_id,
+            artist.name,
+            artist.images->1->'url'->>0 as image,
+            artist_stats.sec_listened/60 as min_listened
+        from stats.artists_listened_monthly artist_stats
+        inner join {db_schema}.artist artist
+            on artist_stats.artist_id = artist.id
+    """
+    df = cx.read_sql(conn=_db_url, query=query, return_type="polars")
+
+    return df

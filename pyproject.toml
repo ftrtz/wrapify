@@ -33,11 +33,13 @@ api = [
 web = [
     "polars>=1.31.0",
     "connectorx>=0.4.4",
-    "streamlit>=1.47.0",
+    "streamlit>=1.52.0",
     # Only the `annotated_text` helper is needed; the full `streamlit-extras`
     # package drags in plotly/matplotlib/snowflake/botocore (~200MB).
     "st-annotated-text>=4.0.0",
     "altair>=5.0.0",
+    # Standalone package behind `streamlit_extras.card`
+    "streamlit-card>=1.0.2",
 ]
 
 [dependency-groups]
