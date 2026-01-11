@@ -31,6 +31,9 @@ db_url = f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_SECRET
 db_schema = "prod"
 
 # ========== LOAD DATA
+artist_monthly = load_artist_monthly(db_url, db_schema)
+
+# - LEGACY START -----------------------------------------------------------------------------------------------------------
 played_raw = load_played_joined(db_url, db_schema)
 artist = load_artist(db_url, db_schema)
 track = load_track(db_url, db_schema)
@@ -48,59 +51,20 @@ if "start_date" not in state:
 
 if "end_date" not in state:
     state.end_date = max_dt
-
-
-# functions for date range buttons
-def _today_cb() -> None:
-    state.start_date = date.today()
-    state.end_date = max_dt
-
-
-def _last_seven_days_cb() -> None:
-    state.start_date = date.today() - timedelta(days=7)
-    state.end_date = max_dt
-
-
-def _last_fourteen_days_cb() -> None:
-    state.start_date = date.today() - timedelta(days=14)
-    state.end_date = max_dt
-
-
-def _this_month_cb() -> None:
-    state.start_date = date(date.today().year, date.today().month, 1)
-    state.end_date = max_dt
-
-
-def _this_year_cb() -> None:
-    state.start_date = date(date.today().year, 1, 1)
-    state.end_date = max_dt
-
-
-def _all_time_cb() -> None:
-    state.start_date = min_dt
-    state.end_date = max_dt
+# - LEGACY END -------------------------------------------------------------------------------------------------------------
 
 
 with st.sidebar:
-    st.header("Date filter")
-
-    st.button("Today", on_click=_today_cb)
-    st.button("Last 7 days", on_click=_last_seven_days_cb)
-    st.button("Last 14 days", on_click=_last_fourteen_days_cb)
-    st.button("This month", on_click=_this_month_cb)
-    st.button("This year", on_click=_this_year_cb)
-    st.button("All time", on_click=_all_time_cb)
+    st.header("Filter by Year")
+    selected_year = st.selectbox(
+        "",
+        options=artist_monthly["year_played"].unique().sort(descending=True).to_list(),
+        placeholder="Select Year",
+    )
 
     if state.start_date < min_dt:
         state.start_date = min_dt
 
-    state.start_date, state.end_date = date_range_picker(
-        "Date range",
-        default_start=state.start_date,
-        default_end=state.end_date,
-        min_date=min_dt,
-        max_date=max_dt,
-    )
 
     start_date = state.start_date
     end_date = state.end_date
@@ -116,6 +80,11 @@ else:
     top_artists_played = get_top_artists_played(
         played, artist.with_columns(pl.col("genres").list.join(", "))
     )
+
+
+    # ---------------------------------------- TRANSFORM ----------------------------------------
+    # Filter data for selected year
+    year_data = artist_monthly.filter(pl.col("year_played") == selected_year)
 
     # ---------------------------------------- OVERALL STATS CARDS ----------------------------------------
     # --- Prepare genres
@@ -136,13 +105,13 @@ else:
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         with st.container(height=125, border=True):
-            total_time = played["duration_ms"].sum() / 60000
+            total_time = year_data["min_listened"].sum()
             st.metric(label="Total time listened", value=f"{int(total_time)} min")
     with c2:
         with st.container(height=125, border=True):
             st.metric(
                 label="Different artists",
-                value=played.unique("main_artist_id").shape[0],
+                value=year_data.unique("artist_id").shape[0],
             )
     with c3:
         with st.container(height=125, border=True):
@@ -158,122 +127,111 @@ else:
                 value=round(avg_pop, 2),
                 delta=round(avg_pop - track["popularity"].mean(), 2),
             )
+    # ---------------------------------------- TOP ARTIST PER MONTH ----------------------------------------
 
-    t0, t1, t2, t3 = st.tabs(["MONTHLY", "Favorites", "Metrics", "Recently Played"])
+    st.header("Top Artist by Month")
 
-    # ---------------------------------------- TAB 0: MONTHLY ----------------------------------------
-    with t0:
-        st.header("Top Artist by Month")
+    # Calculate total minutes per month
+    monthly_totals = year_data.group_by("month_played").agg(
+        pl.col("min_listened").sum().alias("min_total")
+    )
 
-        artist_monthly = load_artist_monthly(db_url, db_schema)
-
-        selected_year = st.selectbox(
-            "",
-            options=artist_monthly["year_played"].unique().sort(descending=True).to_list(),
-            placeholder="Select Year",
+    # Get top artist per month (highest min_listened)
+    top_artist_per_month = (
+        year_data.sort("min_listened", descending=True)
+        .group_by("month_played")
+        .first()
+        .join(monthly_totals, on="month_played")
+        .with_columns(
+            (pl.col("min_total") - pl.col("min_listened")).alias("min_others"),
+            pl.col("month_played")
+            .map_elements(lambda x: calendar.month_name[1:][x - 1], return_dtype=pl.Utf8)
+            .alias("month_name"),
         )
+        .sort("month_played")
+    )
 
-        # Filter data for selected year
-        year_data = artist_monthly.filter(pl.col("year_played") == selected_year)
-
-        # Calculate total minutes per month
-        monthly_totals = year_data.group_by("month_played").agg(
-            pl.col("min_listened").sum().alias("min_total")
-        )
-
-        # Get top artist per month (highest min_listened)
-        top_artist_per_month = (
-            year_data.sort("min_listened", descending=True)
-            .group_by("month_played")
-            .first()
-            .join(monthly_totals, on="month_played")
-            .with_columns(
-                (pl.col("min_total") - pl.col("min_listened")).alias("min_others"),
-                pl.col("month_played")
-                .map_elements(lambda x: calendar.month_name[1:][x - 1], return_dtype=pl.Utf8)
-                .alias("month_name"),
-            )
-            .sort("month_played")
-        )
-
-        def chart_gradient(df, y_column, color_rgb):
-            chart = (
-                alt.Chart(df)
-                .mark_area(
-                    line={"color": f"rgba({color_rgb}, 1)"},
-                    color=alt.Gradient(
-                        gradient="linear",
-                        stops=[
-                            alt.GradientStop(color=f"rgba({color_rgb}, 0)", offset=0),
-                            alt.GradientStop(color=f"rgba({color_rgb}, 0.7)", offset=1),
-                        ],
-                        x1=1,
-                        x2=1,
-                        y1=1,
-                        y2=0,
-                    ),
-                )
-                .encode(
-                    alt.X(
-                        "month_played:O",
-                        title=None,
-                        axis=alt.Axis(
-                            labelExpr=f"{calendar.month_name[1:]}[datum.value-1]", labelAngle=0
-                        ),
-                    ),
-                    alt.Y(
-                        f"{y_column}:Q",
-                        title=None,
-                        axis=alt.Axis(grid=False, labels=False, ticks=False),
-                    ),
-                    tooltip=[
-                        alt.Tooltip("month_name:O", title="Month"),
-                        alt.Tooltip("name:O", title="Top Artist"),
-                        alt.Tooltip("min_listened:Q", title="Min listened", format=",d"),
-                        alt.Tooltip("min_total:Q", title="Total min listened", format=",d"),
+    def chart_gradient(df, y_column, color_rgb):
+        chart = (
+            alt.Chart(df)
+            .mark_area(
+                line={"color": f"rgba({color_rgb}, 1)"},
+                color=alt.Gradient(
+                    gradient="linear",
+                    stops=[
+                        alt.GradientStop(color=f"rgba({color_rgb}, 0)", offset=0),
+                        alt.GradientStop(color=f"rgba({color_rgb}, 0.7)", offset=1),
                     ],
-                )
+                    x1=1,
+                    x2=1,
+                    y1=1,
+                    y2=0,
+                ),
             )
-            return chart
-
-        chart = alt.layer(
-            chart_gradient(top_artist_per_month, "min_total", "83, 83, 83"),
-            chart_gradient(top_artist_per_month, "min_listened", "29, 185, 84"),
+            .encode(
+                alt.X(
+                    "month_played:O",
+                    title=None,
+                    axis=alt.Axis(
+                        labelExpr=f"{calendar.month_name[1:]}[datum.value-1]", labelAngle=0
+                    ),
+                ),
+                alt.Y(
+                    f"{y_column}:Q",
+                    title=None,
+                    axis=alt.Axis(grid=False, labels=False, ticks=False),
+                ),
+                tooltip=[
+                    alt.Tooltip("month_name:O", title="Month"),
+                    alt.Tooltip("name:O", title="Top Artist"),
+                    alt.Tooltip("min_listened:Q", title="Min listened", format=",d"),
+                    alt.Tooltip("min_total:Q", title="Total min listened", format=",d"),
+                ],
+            )
         )
-        st.altair_chart(chart, width="stretch")
+        return chart
 
-        # -------- MONTHLY CARDS
+    chart = alt.layer(
+        chart_gradient(top_artist_per_month, "min_total", "83, 83, 83"),
+        chart_gradient(top_artist_per_month, "min_listened", "29, 185, 84"),
+    )
+    st.altair_chart(chart, width="stretch")
 
-        # Define card
-        def card_1(month_data):
-            card(
-                title=month_data["name"],  # calendar.month_name[month],
-                text=str(month_data["min_listened"]) + " min listened",
-                image=month_data["image"],
-                styles={
-                    "card": {
-                        "margin": "0",
-                        "width": "100%",  # <- make the card use the width of its container, note that it will not resize the height of the card automatically
-                        # "height": "250px",
-                    }
-                },
-            )
+    # -------- MONTHLY CARDS
 
-        # Create card grid
-        months_in_data = (
-            top_artist_per_month["month_played"].unique().sort(descending=False).to_list()
+    # Define card
+    def card_1(month_data):
+        card(
+            title="",  # calendar.month_name[month],
+            text=month_data["name"], # str(month_data["min_listened"]) + " min listened",
+            image=month_data["image"],
+            styles={
+                "card": {
+                    "margin": "0",
+                    "width": "100%",
+
+                }
+            },
+            key=month_data["name"] + str(month_data["min_listened"]),
         )
 
-        cols = st.columns(len(months_in_data))
+    # Create card grid
+    months_in_data = (
+        top_artist_per_month["month_played"].unique().sort(descending=False).to_list()
+    )
 
-        for col_idx, month in enumerate(months_in_data):
-            month_data = top_artist_per_month.filter(pl.col("month_played") == month).row(
-                0, named=True
-            )
+    cols = st.columns(len(months_in_data))
 
-            with cols[col_idx]:
-                card_1(month_data)
+    for col_idx, month in enumerate(months_in_data):
+        month_data = top_artist_per_month.filter(pl.col("month_played") == month).row(
+            0, named=True
+        )
 
+        with cols[col_idx]:
+            card_1(month_data)
+
+    # ---------------------------------------- TABS LAYOUT ----------------------------------------
+    t1, t2, t3 = st.tabs(["Favorites", "Metrics", "Recently Played"])
     # ---------------------------------------- TAB 1: FAVORITES ----------------------------------------
     with t1:
         # --- Artists
@@ -282,32 +240,35 @@ else:
         # prepare spotlight container on top of the table
         spot1, spot2, spot3 = st.columns([1, 2, 2])
 
+        # Prepare ranked artists per month
+        ranked_artists_per_month = (
+            year_data.with_columns(
+                pl.col("min_listened").rank("ordinal", descending=True).over("month_played").alias("rank")
+            )
+            .sort(["month_played", "rank"])
+        )
+
         event = st.dataframe(
-            top_artists_played.with_columns(pl.col("genres").str.split(", ")),
+            ranked_artists_per_month,
             column_config={
                 "rank": st.column_config.NumberColumn("🔢", format="#%d", width=15),
                 "image": st.column_config.ImageColumn(""),
-                "main_artist_id": None,
-                "id": None,
-                "duration_ms": None,
+                "artist_id": None,
                 "name": st.column_config.Column(""),
-                "main_artist": None,
-                "duration_min": st.column_config.NumberColumn(
+                "min_listened": st.column_config.NumberColumn(
                     "⏳", format="%d min", help="Time listened in minutes"
                 ),
-                "followers": st.column_config.Column("👥", help="Followers"),
-                "genres": st.column_config.Column("🎶", help="Genres"),
-                "popularity": st.column_config.ProgressColumn(
+                "followers": st.column_config.Column("👥", help="Followers"),           # Info missing in data
+                "genres": st.column_config.Column("🎶", help="Genres"),                 # Info missing in data
+                "popularity": st.column_config.ProgressColumn(                          # Info missing in data
                     "🌟", format="%f", min_value=0, max_value=100, help="Popularity"
                 ),
-                "uri": None,
-                "images": None,
             },
             column_order=[
                 "rank",
                 "image",
                 "name",
-                "duration_min",
+                "min_listened",
                 "genres",
                 "popularity",
                 "followers",
