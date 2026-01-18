@@ -7,8 +7,13 @@ create table if not exists {{ analytics_schema }}.artists_listened_monthly (
     primary key(year_played, month_played, artist_id),
     year_played int not null,
     month_played int not null,
-    artist_id VARCHAR not null references {{ prod_schema }}.artist(id),
     sec_listened int not null,
+    artist_id VARCHAR not null references {{ prod_schema }}.artist(id),
+    name varchar not null,
+    image varchar,
+    popularity int not null,
+    followers int not null,
+    genres text[],
     created timestamp with time zone default now(),
     updated timestamp with time zone default now()
 );
