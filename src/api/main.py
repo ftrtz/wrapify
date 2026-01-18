@@ -34,18 +34,16 @@ def get_top_artist(
     """
     query = text("""
         select
-            artist_stats.year_played,
-            artist_stats.month_played,
-            artist_stats.artist_id,
-            artist.name,
-            artist.images->1->'url'->>0 as image,
-            artist_stats.sec_listened/60 as min_listened
-        from stats.artists_listened_monthly artist_stats
-        inner join prod.artist artist
-            on artist_stats.artist_id = artist.id
-        where artist_stats.year_played = :year
-            and artist_stats.month_played = :month
-        order by artist_stats.sec_listened desc
+            year_played,
+            month_played,
+            artist_id,
+            name,
+            image,
+            sec_listened/60 as min_listened
+        from stats.artists_listened_monthly
+        where year_played = :year
+            and month_played = :month
+        order by sec_listened desc
         limit 1;
     """)
 

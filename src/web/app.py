@@ -191,34 +191,44 @@ else:
         )
         return chart
 
-    chart = alt.layer(
-        chart_gradient(top_artist_per_month, "min_total", "83, 83, 83"),
-        chart_gradient(top_artist_per_month, "min_listened", "29, 185, 84"),
-    )
-    st.altair_chart(chart, width="stretch")
+    # Remove comments to show the monthly listened time for top and other artists
+    # chart = alt.layer(
+    #     chart_gradient(top_artist_per_month, "min_total", "83, 83, 83"),
+    #     chart_gradient(top_artist_per_month, "min_listened", "29, 185, 84"),
+    # )
+    # st.altair_chart(chart, width="stretch")
 
     # -------- MONTHLY CARDS
 
-    # Define card
-    def card_1(month_data):
-        card(
-            title="",  # calendar.month_name[month],
-            text=month_data["name"], # str(month_data["min_listened"]) + " min listened",
-            image=month_data["image"],
-            styles={
-                "card": {
-                    "margin": "0",
-                    "width": "100%",
-
-                }
-            },
-            key=month_data["name"] + str(month_data["min_listened"]),
-        )
-
-    # Create card grid
+    # Initialize selected month in session state (default to first month)
     months_in_data = (
         top_artist_per_month["month_played"].unique().sort(descending=False).to_list()
     )
+    if "selected_month" not in state or state.selected_month not in months_in_data:
+        state.selected_month = months_in_data[0] if months_in_data else None
+
+    # Define card with selection styling
+    def card_1(month_data, is_selected=False):
+        card_styles = {
+            "card": {
+                "margin": "0",
+                "width": "100%",
+                "border": "3px solid #1DB954" if is_selected else "3px solid transparent",
+                "border-radius": "10px",
+                "box-shadow": "0 0 10px rgba(29, 185, 84, 0.5)" if is_selected else "none",
+            }
+        }
+        card(
+            title="",
+            text="",
+            image=month_data["image"],
+            styles=card_styles,
+            key=f"card_{month_data['month_played']}",
+        )
+
+    # Selection callback
+    def select_month(month):
+        state.selected_month = month
 
     cols = st.columns(len(months_in_data))
 
@@ -228,488 +238,541 @@ else:
         )
 
         with cols[col_idx]:
-            card_1(month_data)
+            is_selected = state.selected_month == month
+            card_1(month_data, is_selected=is_selected)
+            st.button(
+                label=calendar.month_abbr[month],
+                key=f"btn_{month}",
+                on_click=select_month,
+                args=(month,),
+                use_container_width=True,
+                type="primary" if is_selected else "secondary",
+            )
+
+
+    artist_monthly_selected = year_data.filter(pl.col("month_played") == state.selected_month)
+
+
+
+    ranked_artists_per_month = (
+        artist_monthly_selected.with_columns(
+            pl.col("min_listened").rank("ordinal", descending=True).alias("rank")
+        )
+        .sort(["rank"])
+    )
+
+    event = st.dataframe(
+        ranked_artists_per_month,
+        column_config={
+            "rank": st.column_config.NumberColumn("🔢", format="#%d", width=15),
+            "image": st.column_config.ImageColumn(""),
+            "artist_id": None,
+            "name": st.column_config.Column(""),
+            "min_listened": st.column_config.NumberColumn(
+                "⏳", format="%d min", help="Time listened in minutes"
+            ),
+            "genres": st.column_config.Column("🎶", help="Genres"),
+            "popularity": st.column_config.ProgressColumn(
+                "🌟", format="%f", min_value=0, max_value=100, help="Popularity"
+            ),
+            "followers": st.column_config.Column("👥", help="Followers"),
+        },
+        column_order=[
+            "rank",
+            "image",
+            "name",
+            "min_listened",
+            "genres",
+            "popularity",
+            "followers",
+        ],
+        hide_index=True,
+        width="stretch",
+        on_select="rerun",
+        selection_mode="single-row",
+    )
+
 
     # ---------------------------------------- TABS LAYOUT ----------------------------------------
-    t1, t2, t3 = st.tabs(["Favorites", "Metrics", "Recently Played"])
+    # t1, t2, t3 = st.tabs(["Favorites", "Metrics", "Recently Played"])
     # ---------------------------------------- TAB 1: FAVORITES ----------------------------------------
-    with t1:
-        # --- Artists
-        st.header("Most Heard Artists")
 
-        # prepare spotlight container on top of the table
-        spot1, spot2, spot3 = st.columns([1, 2, 2])
+    #     # --- Artists
+    #     st.header("Most Heard Artists")
 
-        # Prepare ranked artists per month
-        ranked_artists_per_month = (
-            year_data.with_columns(
-                pl.col("min_listened").rank("ordinal", descending=True).over("month_played").alias("rank")
-            )
-            .sort(["month_played", "rank"])
-        )
+    #     # prepare spotlight container on top of the table
+    #     spot1, spot2, spot3 = st.columns([1, 2, 2])
 
-        event = st.dataframe(
-            ranked_artists_per_month,
-            column_config={
-                "rank": st.column_config.NumberColumn("🔢", format="#%d", width=15),
-                "image": st.column_config.ImageColumn(""),
-                "artist_id": None,
-                "name": st.column_config.Column(""),
-                "min_listened": st.column_config.NumberColumn(
-                    "⏳", format="%d min", help="Time listened in minutes"
-                ),
-                "followers": st.column_config.Column("👥", help="Followers"),           # Info missing in data
-                "genres": st.column_config.Column("🎶", help="Genres"),                 # Info missing in data
-                "popularity": st.column_config.ProgressColumn(                          # Info missing in data
-                    "🌟", format="%f", min_value=0, max_value=100, help="Popularity"
-                ),
-            },
-            column_order=[
-                "rank",
-                "image",
-                "name",
-                "min_listened",
-                "genres",
-                "popularity",
-                "followers",
-            ],
-            hide_index=True,
-            width="stretch",
-            on_select="rerun",
-            selection_mode="single-row",
-        )
+    #     # Prepare ranked artists per month
+    #     ranked_artists_per_month = (
+    #         year_data.with_columns(
+    #             pl.col("min_listened").rank("ordinal", descending=True).over("month_played").alias("rank")
+    #         )
+    #         .sort(["month_played", "rank"])
+    #     )
 
-        if event.selection.rows:
-            selected_idx = event.selection.rows[0]
-        else:
-            selected_idx = 0
+    #     event = st.dataframe(
+    #         ranked_artists_per_month,
+    #         column_config={
+    #             "rank": st.column_config.NumberColumn("🔢", format="#%d", width=15),
+    #             "image": st.column_config.ImageColumn(""),
+    #             "artist_id": None,
+    #             "name": st.column_config.Column(""),
+    #             "min_listened": st.column_config.NumberColumn(
+    #                 "⏳", format="%d min", help="Time listened in minutes"
+    #             ),
+    #             "followers": st.column_config.Column("👥", help="Followers"),           # Info missing in data
+    #             "genres": st.column_config.Column("🎶", help="Genres"),                 # Info missing in data
+    #             "popularity": st.column_config.ProgressColumn(                          # Info missing in data
+    #                 "🌟", format="%f", min_value=0, max_value=100, help="Popularity"
+    #             ),
+    #         },
+    #         column_order=[
+    #             "rank",
+    #             "image",
+    #             "name",
+    #             "min_listened",
+    #             "genres",
+    #             "popularity",
+    #             "followers",
+    #         ],
+    #         hide_index=True,
+    #         width="stretch",
+    #         on_select="rerun",
+    #         selection_mode="single-row",
+    #     )
 
-        selected_artist = top_artists_played.row(selected_idx, named=True)
+    #     if event.selection.rows:
+    #         selected_idx = event.selection.rows[0]
+    #     else:
+    #         selected_idx = 0
 
-        # --- Selected Artist Spotlight
-        with spot1:
-            # Image
-            annotated_text((f"#{selected_artist['rank']}", f"{selected_artist['name']}"))
+    #     selected_artist = top_artists_played.row(selected_idx, named=True)
 
-            st.markdown(
-                f"""
-                <div style="
-                    width: 100%;
-                    min-height: 218px;
-                    background-image: url('{selected_artist["image"]}');
-                    background-size: cover;
-                    background-position: center;
-                    border-radius: 10px;
-                ">
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+    #     # --- Selected Artist Spotlight
+    #     with spot1:
+    #         # Image
+    #         annotated_text((f"#{selected_artist['rank']}", f"{selected_artist['name']}"))
 
-        with spot2:
-            # Cumulative Time Listened
-            with st.container(height=260, border=True):
-                st.caption("Cumulative Time Listened (min)")
-                selected_cum_time = (
-                    played.filter(pl.col("main_artist_id") == selected_artist["main_artist_id"])
-                    .with_columns(
-                        [
-                            (pl.col("duration_ms") / 60000).alias("duration_min"),
-                        ]
-                    )
-                    .with_columns([pl.col("duration_min").cum_sum().alias("duration_min_cumsum")])
-                )
+    #         st.markdown(
+    #             f"""
+    #             <div style="
+    #                 width: 100%;
+    #                 min-height: 218px;
+    #                 background-image: url('{selected_artist["image"]}');
+    #                 background-size: cover;
+    #                 background-position: center;
+    #                 border-radius: 10px;
+    #             ">
+    #             </div>
+    #             """,
+    #             unsafe_allow_html=True,
+    #         )
 
-                st.altair_chart(
-                    alt.Chart(selected_cum_time)
-                    .mark_line()
-                    .encode(
-                        x=alt.X("played_at", title=None),
-                        y=alt.Y(
-                            "duration_min_cumsum",
-                            axis=alt.Axis(title=None, tickMinStep=1),
-                        ),
-                    )
-                    .properties(height=180),
-                    width="stretch",
-                )
+    #     with spot2:
+    #         # Cumulative Time Listened
+    #         with st.container(height=260, border=True):
+    #             st.caption("Cumulative Time Listened (min)")
+    #             selected_cum_time = (
+    #                 played.filter(pl.col("main_artist_id") == selected_artist["main_artist_id"])
+    #                 .with_columns(
+    #                     [
+    #                         (pl.col("duration_ms") / 60000).alias("duration_min"),
+    #                     ]
+    #                 )
+    #                 .with_columns([pl.col("duration_min").cum_sum().alias("duration_min_cumsum")])
+    #             )
 
-        with spot3:
-            # Most Played Tracks
-            selected_artist_tracks = (
-                played.filter(pl.col("main_artist_id") == selected_artist["main_artist_id"])
-                .group_by("image", "track")
-                .len("count")
-                .sort(by="count", descending=True)
-            )
-            st.dataframe(
-                selected_artist_tracks,
-                column_config={
-                    "image": st.column_config.ImageColumn("Cover"),
-                    "track": st.column_config.Column("Title"),
-                    "count": st.column_config.Column("Plays"),
-                },
-                column_order=["count", "image", "track"],
-                hide_index=True,
-                width="stretch",
-                height=260,
-            )
+    #             st.altair_chart(
+    #                 alt.Chart(selected_cum_time)
+    #                 .mark_line()
+    #                 .encode(
+    #                     x=alt.X("played_at", title=None),
+    #                     y=alt.Y(
+    #                         "duration_min_cumsum",
+    #                         axis=alt.Axis(title=None, tickMinStep=1),
+    #                     ),
+    #                 )
+    #                 .properties(height=180),
+    #                 width="stretch",
+    #             )
 
-        # --- Tracks
-        st.header("Most Played Tracks")
+    #     with spot3:
+    #         # Most Played Tracks
+    #         selected_artist_tracks = (
+    #             played.filter(pl.col("main_artist_id") == selected_artist["main_artist_id"])
+    #             .group_by("image", "track")
+    #             .len("count")
+    #             .sort(by="count", descending=True)
+    #         )
+    #         st.dataframe(
+    #             selected_artist_tracks,
+    #             column_config={
+    #                 "image": st.column_config.ImageColumn("Cover"),
+    #                 "track": st.column_config.Column("Title"),
+    #                 "count": st.column_config.Column("Plays"),
+    #             },
+    #             column_order=["count", "image", "track"],
+    #             hide_index=True,
+    #             width="stretch",
+    #             height=260,
+    #         )
 
-        # prepare spotlight container on top of the table
-        spot1, spot2, spot3 = st.columns([1, 2, 2])
+    #     # --- Tracks
+    #     st.header("Most Played Tracks")
 
-        # prepare the track data for the table
-        top_tracks_played = get_top_tracks_played(played)
+    #     # prepare spotlight container on top of the table
+    #     spot1, spot2, spot3 = st.columns([1, 2, 2])
 
-        event = st.dataframe(
-            top_tracks_played,
-            column_config={
-                "rank": st.column_config.NumberColumn("🔢", format="#%d", width=15),
-                "image": st.column_config.ImageColumn(""),
-                "track_id": None,
-                "track": st.column_config.Column("Title"),
-                "artist": st.column_config.Column("Artist"),
-                "album": st.column_config.Column("Album"),
-                "popularity": st.column_config.ProgressColumn(
-                    "🌟", format="%f", min_value=0, max_value=100, help="Popularity"
-                ),
-                "count": st.column_config.Column(
-                    "Plays", help="Number of times this track was played"
-                ),
-                "spotify_uri": st.column_config.LinkColumn(
-                    "▶️", help="Open in Spotify", display_text="▶️"
-                ),
-            },
-            column_order=[
-                "rank",
-                "image",
-                "count",
-                "track",
-                "artist",
-                "album",
-                "popularity",
-                "spotify_uri",
-            ],
-            hide_index=True,
-            width="stretch",
-            on_select="rerun",
-            selection_mode="single-row",
-        )
+    #     # prepare the track data for the table
+    #     top_tracks_played = get_top_tracks_played(played)
 
-        if event.selection.rows:
-            selected_idx = event.selection.rows[0]
-        else:
-            selected_idx = 0
+    #     event = st.dataframe(
+    #         top_tracks_played,
+    #         column_config={
+    #             "rank": st.column_config.NumberColumn("🔢", format="#%d", width=15),
+    #             "image": st.column_config.ImageColumn(""),
+    #             "track_id": None,
+    #             "track": st.column_config.Column("Title"),
+    #             "artist": st.column_config.Column("Artist"),
+    #             "album": st.column_config.Column("Album"),
+    #             "popularity": st.column_config.ProgressColumn(
+    #                 "🌟", format="%f", min_value=0, max_value=100, help="Popularity"
+    #             ),
+    #             "count": st.column_config.Column(
+    #                 "Plays", help="Number of times this track was played"
+    #             ),
+    #             "spotify_uri": st.column_config.LinkColumn(
+    #                 "▶️", help="Open in Spotify", display_text="▶️"
+    #             ),
+    #         },
+    #         column_order=[
+    #             "rank",
+    #             "image",
+    #             "count",
+    #             "track",
+    #             "artist",
+    #             "album",
+    #             "popularity",
+    #             "spotify_uri",
+    #         ],
+    #         hide_index=True,
+    #         width="stretch",
+    #         on_select="rerun",
+    #         selection_mode="single-row",
+    #     )
 
-        selected_track = top_tracks_played.row(selected_idx, named=True)
+    #     if event.selection.rows:
+    #         selected_idx = event.selection.rows[0]
+    #     else:
+    #         selected_idx = 0
 
-        # --- Selected Track Spotlight
-        with spot1:
-            # Image
-            annotated_text((f"#{selected_track['rank']}", f"{selected_track['track']}"))
+    #     selected_track = top_tracks_played.row(selected_idx, named=True)
 
-            st.markdown(
-                f"""
-                <div style="
-                    width: 100%;
-                    min-height: 218px;
-                    background-image: url('{selected_track["image"]}');
-                    background-size: cover;
-                    background-position: center;
-                    border-radius: 10px;
-                ">
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+    #     # --- Selected Track Spotlight
+    #     with spot1:
+    #         # Image
+    #         annotated_text((f"#{selected_track['rank']}", f"{selected_track['track']}"))
 
-        with spot2:
-            # Cumulative Plays
-            with st.container(height=282, border=True):
-                st.caption("Cumulative Plays")
+    #         st.markdown(
+    #             f"""
+    #             <div style="
+    #                 width: 100%;
+    #                 min-height: 218px;
+    #                 background-image: url('{selected_track["image"]}');
+    #                 background-size: cover;
+    #                 background-position: center;
+    #                 border-radius: 10px;
+    #             ">
+    #             </div>
+    #             """,
+    #             unsafe_allow_html=True,
+    #         )
 
-                selected_cum_plays = (
-                    played.filter(pl.col("track_id") == selected_track["track_id"])
-                    .sort("played_at")
-                    .group_by("played_at")
-                    .len("count")
-                    .with_columns([pl.col("count").cum_sum().alias("cumsum")])
-                )
+    #     with spot2:
+    #         # Cumulative Plays
+    #         with st.container(height=282, border=True):
+    #             st.caption("Cumulative Plays")
 
-                st.altair_chart(
-                    alt.Chart(selected_cum_plays)
-                    .mark_line()
-                    .encode(
-                        x=alt.X("played_at", title=None),
-                        y=alt.Y("cumsum", axis=alt.Axis(title=None, tickMinStep=1)),
-                    )
-                    .properties(height=200),
-                    width="stretch",
-                )
+    #             selected_cum_plays = (
+    #                 played.filter(pl.col("track_id") == selected_track["track_id"])
+    #                 .sort("played_at")
+    #                 .group_by("played_at")
+    #                 .len("count")
+    #                 .with_columns([pl.col("count").cum_sum().alias("cumsum")])
+    #             )
 
-        with spot3:
-            # Audio Features
-            selected_af = audio_features.filter(pl.col("track_id") == selected_track["track_id"])
-            if selected_af.shape[0] == 0:
-                st.info("Audio Features are deprecated and aren't retrieved since November 2024.")
+    #             st.altair_chart(
+    #                 alt.Chart(selected_cum_plays)
+    #                 .mark_line()
+    #                 .encode(
+    #                     x=alt.X("played_at", title=None),
+    #                     y=alt.Y("cumsum", axis=alt.Axis(title=None, tickMinStep=1)),
+    #                 )
+    #                 .properties(height=200),
+    #                 width="stretch",
+    #             )
 
-            else:
-                selected_af_pivoted = selected_af.unpivot(
-                    index="track_id",
-                    on=[
-                        "acousticness",
-                        "danceability",
-                        "energy",
-                        "instrumentalness",
-                        "liveness",
-                        "speechiness",
-                        "valence",
-                    ],
-                    variable_name="Feature",
-                )
+    #     with spot3:
+    #         # Audio Features
+    #         selected_af = audio_features.filter(pl.col("track_id") == selected_track["track_id"])
+    #         if selected_af.shape[0] == 0:
+    #             st.info("Audio Features are deprecated and aren't retrieved since November 2024.")
 
-                st.dataframe(
-                    selected_af_pivoted,
-                    column_config={
-                        "track_id": None,
-                        "Feature": st.column_config.Column("Audio Feature"),
-                        "value": st.column_config.ProgressColumn(
-                            "Value", format="%.2f", min_value=0, max_value=1
-                        ),
-                    },
-                    hide_index=True,
-                    width="stretch",
-                    height=282,
-                )
+    #         else:
+    #             selected_af_pivoted = selected_af.unpivot(
+    #                 index="track_id",
+    #                 on=[
+    #                     "acousticness",
+    #                     "danceability",
+    #                     "energy",
+    #                     "instrumentalness",
+    #                     "liveness",
+    #                     "speechiness",
+    #                     "valence",
+    #                 ],
+    #                 variable_name="Feature",
+    #             )
 
-        # --- Genres
-        st.header("Most Popular Genres")
+    #             st.dataframe(
+    #                 selected_af_pivoted,
+    #                 column_config={
+    #                     "track_id": None,
+    #                     "Feature": st.column_config.Column("Audio Feature"),
+    #                     "value": st.column_config.ProgressColumn(
+    #                         "Value", format="%.2f", min_value=0, max_value=1
+    #                     ),
+    #                 },
+    #                 hide_index=True,
+    #                 width="stretch",
+    #                 height=282,
+    #             )
 
-        # Extract top 10 genres as list of tuples
-        top_genres = all_genres.select(["genres", "count"]).head(10).iter_rows(named=False)
+    #     # --- Genres
+    #     st.header("Most Popular Genres")
 
-        # Build the converted list for annotated_text
-        top_genres_converted = []
-        for genre, count in top_genres:
-            top_genres_converted.append((genre, f"{count}x"))
-            top_genres_converted.append(" ")
+    #     # Extract top 10 genres as list of tuples
+    #     top_genres = all_genres.select(["genres", "count"]).head(10).iter_rows(named=False)
 
-        annotated_text(top_genres_converted)
+    #     # Build the converted list for annotated_text
+    #     top_genres_converted = []
+    #     for genre, count in top_genres:
+    #         top_genres_converted.append((genre, f"{count}x"))
+    #         top_genres_converted.append(" ")
 
-    # ---------------------------------------- TAB 2: METRICS ----------------------------------------
-    with t2:
-        st.header("Artist Metrics")
+    #     annotated_text(top_genres_converted)
 
-        with st.container(border=True):
-            # filter for artists played in time window
-            artist_filtered = artist.join(
-                played, how="left", left_on="id", right_on="main_artist_id"
-            )
+    # # ---------------------------------------- TAB 2: METRICS ----------------------------------------
+    # with t2:
+    #     st.header("Artist Metrics")
 
-            # Create selectbox with metrics
-            selected_metric = st.selectbox(
-                "Select Metric", artist_filtered[["popularity", "followers"]].columns
-            )
+    #     with st.container(border=True):
+    #         # filter for artists played in time window
+    #         artist_filtered = artist.join(
+    #             played, how="left", left_on="id", right_on="main_artist_id"
+    #         )
 
-            # lookup dict for the limits of the selected metric
-            limits = {
-                "popularity": [0, 100],
-                "followers": [
-                    artist_filtered["followers"].min(),
-                    artist_filtered["followers"].max(),
-                ],
-            }
+    #         # Create selectbox with metrics
+    #         selected_metric = st.selectbox(
+    #             "Select Metric", artist_filtered[["popularity", "followers"]].columns
+    #         )
 
-            c1, c2 = st.columns([2, 3])
-            with c1:
-                selector = alt.selection_point(encodings=["x"])
-                event = st.altair_chart(
-                    alt.Chart(artist_filtered)
-                    .mark_bar()
-                    .encode(
-                        x=alt.X(
-                            f"{selected_metric}:Q",
-                            bin=True,
-                            scale=alt.Scale(domain=limits[selected_metric]),
-                        ),
-                        y="count(*):Q",
-                        color=alt.condition(
-                            selector,
-                            f"{selected_metric}:Q",
-                            alt.value("lightgray"),
-                            legend=None,
-                            sort="descending",
-                        ),
-                    )
-                    .add_params(selector)
-                    .properties(height=300),
-                    width="stretch",
-                    on_select="rerun",
-                )
-                # TODO: follower histogram should be log scale
+    #         # lookup dict for the limits of the selected metric
+    #         limits = {
+    #             "popularity": [0, 100],
+    #             "followers": [
+    #                 artist_filtered["followers"].min(),
+    #                 artist_filtered["followers"].max(),
+    #             ],
+    #         }
 
-            with c2:
-                if not event["selection"]["param_1"]:
-                    range_selection = limits[selected_metric]
-                else:
-                    range_selection = event["selection"]["param_1"][0][selected_metric]
+    #         c1, c2 = st.columns([2, 3])
+    #         with c1:
+    #             selector = alt.selection_point(encodings=["x"])
+    #             event = st.altair_chart(
+    #                 alt.Chart(artist_filtered)
+    #                 .mark_bar()
+    #                 .encode(
+    #                     x=alt.X(
+    #                         f"{selected_metric}:Q",
+    #                         bin=True,
+    #                         scale=alt.Scale(domain=limits[selected_metric]),
+    #                     ),
+    #                     y="count(*):Q",
+    #                     color=alt.condition(
+    #                         selector,
+    #                         f"{selected_metric}:Q",
+    #                         alt.value("lightgray"),
+    #                         legend=None,
+    #                         sort="descending",
+    #                     ),
+    #                 )
+    #                 .add_params(selector)
+    #                 .properties(height=300),
+    #                 width="stretch",
+    #                 on_select="rerun",
+    #             )
+    #             # TODO: follower histogram should be log scale
 
-                artist_param = artist_filtered.filter(
-                    (pl.col(selected_metric) > range_selection[0])
-                    & (pl.col(selected_metric) <= range_selection[1])
-                ).sort(selected_metric, descending=True)
+    #         with c2:
+    #             if not event["selection"]["param_1"]:
+    #                 range_selection = limits[selected_metric]
+    #             else:
+    #                 range_selection = event["selection"]["param_1"][0][selected_metric]
 
-                st.dataframe(
-                    artist_param,
-                    column_config={
-                        "image": st.column_config.ImageColumn("Cover"),
-                        f"{selected_metric}": st.column_config.Column(
-                            f"{selected_metric} ({range_selection[0]} - {range_selection[1]})"
-                        ),
-                        "name": st.column_config.Column("Artist"),
-                        "id": None,
-                        "duration_ms": None,
-                        "album_id": None,
-                        "album_images": None,
-                        "uri": None,
-                    },
-                    hide_index=True,
-                    width="stretch",
-                    column_order=[selected_metric, "image", "name"],
-                    height=300,
-                )
+    #             artist_param = artist_filtered.filter(
+    #                 (pl.col(selected_metric) > range_selection[0])
+    #                 & (pl.col(selected_metric) <= range_selection[1])
+    #             ).sort(selected_metric, descending=True)
 
-        st.header(
-            "Track Metrics",
-            help="Audio Features were deprecated by Spotify. Only Tracks played before November 2024 have all Metrics.",
-        )
+    #             st.dataframe(
+    #                 artist_param,
+    #                 column_config={
+    #                     "image": st.column_config.ImageColumn("Cover"),
+    #                     f"{selected_metric}": st.column_config.Column(
+    #                         f"{selected_metric} ({range_selection[0]} - {range_selection[1]})"
+    #                     ),
+    #                     "name": st.column_config.Column("Artist"),
+    #                     "id": None,
+    #                     "duration_ms": None,
+    #                     "album_id": None,
+    #                     "album_images": None,
+    #                     "uri": None,
+    #                 },
+    #                 hide_index=True,
+    #                 width="stretch",
+    #                 column_order=[selected_metric, "image", "name"],
+    #                 height=300,
+    #             )
 
-        with st.container(border=True):
-            # merge all played tracks with audio features
-            p_select = played.select("track_id", "track", "artist", "popularity", "image").unique()
-            track_full = p_select.join(audio_features, on="track_id", how="left")
+    #     st.header(
+    #         "Track Metrics",
+    #         help="Audio Features were deprecated by Spotify. Only Tracks played before November 2024 have all Metrics.",
+    #     )
 
-            selected_metric = st.selectbox(
-                "Select Metric",
-                track_full.drop(
-                    "track_id", "track", "artist", "image", "mode", "analysis_url"
-                ).columns,
-            )
+    #     with st.container(border=True):
+    #         # merge all played tracks with audio features
+    #         p_select = played.select("track_id", "track", "artist", "popularity", "image").unique()
+    #         track_full = p_select.join(audio_features, on="track_id", how="left")
 
-            # lookup dict for the limits of the selected metric
-            limits = {
-                "popularity": [0, 100],
-                "danceability": [0, 1],
-                "energy": [0, 1],
-                "key": [track_full["key"].min(), track_full["key"].max()],
-                "loudness": [
-                    track_full["loudness"].min(),
-                    track_full["loudness"].max(),
-                ],
-                "speechiness": [0, 1],
-                "acousticness": [0, 1],
-                "instrumentalness": [0, 1],
-                "liveness": [0, 1],
-                "valence": [0, 1],
-                "tempo": [track_full["tempo"].min(), track_full["tempo"].max()],
-                "time_signature": [
-                    track_full["time_signature"].min(),
-                    track_full["time_signature"].max(),
-                ],
-            }
+    #         selected_metric = st.selectbox(
+    #             "Select Metric",
+    #             track_full.drop(
+    #                 "track_id", "track", "artist", "image", "mode", "analysis_url"
+    #             ).columns,
+    #         )
 
-            c1, c2 = st.columns([2, 3])
-            with c1:
-                selector = alt.selection_point(encodings=["x"])
-                event = st.altair_chart(
-                    alt.Chart(track_full)
-                    .mark_bar()
-                    .encode(
-                        x=alt.X(
-                            f"{selected_metric}:Q",
-                            bin=True,
-                            scale=alt.Scale(domain=limits[selected_metric]),
-                        ),
-                        y="count(*):Q",
-                        color=alt.condition(
-                            selector,
-                            f"{selected_metric}:Q",
-                            alt.value("lightgray"),
-                            legend=None,
-                            sort="descending",
-                        ),
-                    )
-                    .add_params(selector)
-                    .properties(height=300),
-                    width="stretch",
-                    on_select="rerun",
-                )
+    #         # lookup dict for the limits of the selected metric
+    #         limits = {
+    #             "popularity": [0, 100],
+    #             "danceability": [0, 1],
+    #             "energy": [0, 1],
+    #             "key": [track_full["key"].min(), track_full["key"].max()],
+    #             "loudness": [
+    #                 track_full["loudness"].min(),
+    #                 track_full["loudness"].max(),
+    #             ],
+    #             "speechiness": [0, 1],
+    #             "acousticness": [0, 1],
+    #             "instrumentalness": [0, 1],
+    #             "liveness": [0, 1],
+    #             "valence": [0, 1],
+    #             "tempo": [track_full["tempo"].min(), track_full["tempo"].max()],
+    #             "time_signature": [
+    #                 track_full["time_signature"].min(),
+    #                 track_full["time_signature"].max(),
+    #             ],
+    #         }
 
-            with c2:
-                if not event["selection"]["param_1"]:
-                    range_selection = limits[selected_metric]
-                else:
-                    range_selection = event["selection"]["param_1"][0][selected_metric]
+    #         c1, c2 = st.columns([2, 3])
+    #         with c1:
+    #             selector = alt.selection_point(encodings=["x"])
+    #             event = st.altair_chart(
+    #                 alt.Chart(track_full)
+    #                 .mark_bar()
+    #                 .encode(
+    #                     x=alt.X(
+    #                         f"{selected_metric}:Q",
+    #                         bin=True,
+    #                         scale=alt.Scale(domain=limits[selected_metric]),
+    #                     ),
+    #                     y="count(*):Q",
+    #                     color=alt.condition(
+    #                         selector,
+    #                         f"{selected_metric}:Q",
+    #                         alt.value("lightgray"),
+    #                         legend=None,
+    #                         sort="descending",
+    #                     ),
+    #                 )
+    #                 .add_params(selector)
+    #                 .properties(height=300),
+    #                 width="stretch",
+    #                 on_select="rerun",
+    #             )
 
-                track_param = track_full.filter(
-                    (pl.col(selected_metric) > range_selection[0])
-                    & (pl.col(selected_metric) <= range_selection[1])
-                ).sort(selected_metric, descending=True)
+    #         with c2:
+    #             if not event["selection"]["param_1"]:
+    #                 range_selection = limits[selected_metric]
+    #             else:
+    #                 range_selection = event["selection"]["param_1"][0][selected_metric]
 
-                st.dataframe(
-                    track_param,
-                    column_config={
-                        "image": st.column_config.ImageColumn("Cover"),
-                        f"{selected_metric}": st.column_config.Column(
-                            f"{selected_metric} ({range_selection[0]} - {range_selection[1]})"
-                        ),
-                        "track": st.column_config.Column("Title"),
-                        "artist": st.column_config.Column("Artist"),
-                        "id": None,
-                        "duration_ms": None,
-                        "album_id": None,
-                        "album_images": None,
-                        "uri": None,
-                    },
-                    hide_index=True,
-                    width="stretch",
-                    column_order=[selected_metric, "image", "track", "artist"],
-                    height=300,
-                )
+    #             track_param = track_full.filter(
+    #                 (pl.col(selected_metric) > range_selection[0])
+    #                 & (pl.col(selected_metric) <= range_selection[1])
+    #             ).sort(selected_metric, descending=True)
 
-    with t3:
-        st.header("Recently Played Tracks")
+    #             st.dataframe(
+    #                 track_param,
+    #                 column_config={
+    #                     "image": st.column_config.ImageColumn("Cover"),
+    #                     f"{selected_metric}": st.column_config.Column(
+    #                         f"{selected_metric} ({range_selection[0]} - {range_selection[1]})"
+    #                     ),
+    #                     "track": st.column_config.Column("Title"),
+    #                     "artist": st.column_config.Column("Artist"),
+    #                     "id": None,
+    #                     "duration_ms": None,
+    #                     "album_id": None,
+    #                     "album_images": None,
+    #                     "uri": None,
+    #                 },
+    #                 hide_index=True,
+    #                 width="stretch",
+    #                 column_order=[selected_metric, "image", "track", "artist"],
+    #                 height=300,
+    #             )
 
-        recently_played = played.sort(by="played_at", descending=True)
+    # with t3:
+    #     st.header("Recently Played Tracks")
 
-        st.dataframe(
-            recently_played,
-            column_config={
-                "played_at": st.column_config.DatetimeColumn("Played at"),
-                "image": st.column_config.ImageColumn(""),
-                "track_id": None,
-                "track": st.column_config.Column("Title"),
-                "artist": st.column_config.Column("Artist"),
-                "album": st.column_config.Column("Album"),
-                "popularity": st.column_config.ProgressColumn(
-                    "🌟", format="%f", min_value=0, max_value=100, help="Popularity"
-                ),
-                "spotify_uri": st.column_config.LinkColumn(
-                    "▶️", help="Open in Spotify", display_text="▶️"
-                ),
-            },
-            column_order=[
-                "played_at",
-                "image",
-                "track",
-                "artist",
-                "album",
-                "popularity",
-                "spotify_uri",
-            ],
-            hide_index=True,
-            width="stretch",
-        )
+    #     recently_played = played.sort(by="played_at", descending=True)
+
+    #     st.dataframe(
+    #         recently_played,
+    #         column_config={
+    #             "played_at": st.column_config.DatetimeColumn("Played at"),
+    #             "image": st.column_config.ImageColumn(""),
+    #             "track_id": None,
+    #             "track": st.column_config.Column("Title"),
+    #             "artist": st.column_config.Column("Artist"),
+    #             "album": st.column_config.Column("Album"),
+    #             "popularity": st.column_config.ProgressColumn(
+    #                 "🌟", format="%f", min_value=0, max_value=100, help="Popularity"
+    #             ),
+    #             "spotify_uri": st.column_config.LinkColumn(
+    #                 "▶️", help="Open in Spotify", display_text="▶️"
+    #             ),
+    #         },
+    #         column_order=[
+    #             "played_at",
+    #             "image",
+    #             "track",
+    #             "artist",
+    #             "album",
+    #             "popularity",
+    #             "spotify_uri",
+    #         ],
+    #         hide_index=True,
+    #         width="stretch",
+    #     )
