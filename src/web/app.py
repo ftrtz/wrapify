@@ -100,6 +100,7 @@ else:
     genres_count = all_genres.shape[0]
 
     st.title("Spotify Dashboard")
+    st.subheader(f"Yearly Overview: {selected_year}")
 
     # --- Overall stat cards
     c1, c2, c3, c4, c5 = st.columns(5)
@@ -129,7 +130,7 @@ else:
             )
     # ---------------------------------------- TOP ARTIST PER MONTH ----------------------------------------
 
-    st.header("Top Artist by Month")
+    st.header("Monthly Stats")
 
     # Calculate total minutes per month
     monthly_totals = year_data.group_by("month_played").agg(
@@ -200,46 +201,57 @@ else:
 
     # -------- MONTHLY CARDS
 
-    # Initialize selected month in session state (default to first month)
-    months_in_data = (
-        top_artist_per_month["month_played"].unique().sort(descending=False).to_list()
+    # Always show all 12 months
+    all_months = list(range(1, 13))
+    months_with_data = set(
+        top_artist_per_month["month_played"].unique().to_list()
     )
-    if "selected_month" not in state or state.selected_month not in months_in_data:
-        state.selected_month = months_in_data[0] if months_in_data else None
+
+    # Initialize selected month in session state (default to January)
+    if "selected_month" not in state:
+        state.selected_month = 1
+
+    # Black placeholder image (1x1 black pixel as data URI)
+    image_placeholder = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
 
     # Define card with selection styling
-    def card_1(month_data, is_selected=False):
+    def card_1(month: int, month_data: dict | None, is_selected: bool = False):
         card_styles = {
             "card": {
                 "margin": "0",
                 "width": "100%",
                 "border": "3px solid #1DB954" if is_selected else "3px solid transparent",
                 "border-radius": "10px",
-                "box-shadow": "0 0 10px rgba(29, 185, 84, 0.5)" if is_selected else "none",
-            }
+                "box-shadow": "0 0 10px rgba(0,0,0,0.5)",
+            },
+            "filter": {
+                "background-color": "rgba(0, 0, 0, 0)"  # <- make the image not dimmed anymore
+            },
         }
+        image_url = month_data["image"] if month_data else image_placeholder
         card(
             title="",
             text="",
-            image=month_data["image"],
+            image=image_url,
             styles=card_styles,
-            key=f"card_{month_data['month_played']}",
+            key=f"card_{month}",
         )
 
     # Selection callback
     def select_month(month):
         state.selected_month = month
 
-    cols = st.columns(len(months_in_data))
+    column_widths = [2 if month == state.selected_month else 1 for month in range(1, 13)]
+    cols = st.columns(column_widths)
 
-    for col_idx, month in enumerate(months_in_data):
-        month_data = top_artist_per_month.filter(pl.col("month_played") == month).row(
-            0, named=True
-        )
+    for col_idx, month in enumerate(all_months):
+        # Get month data if available
+        month_df = top_artist_per_month.filter(pl.col("month_played") == month)
+        month_data = month_df.row(0, named=True) if month_df.shape[0] > 0 else None
 
         with cols[col_idx]:
             is_selected = state.selected_month == month
-            card_1(month_data, is_selected=is_selected)
+            card_1(month, month_data, is_selected=is_selected)
             st.button(
                 label=calendar.month_abbr[month],
                 key=f"btn_{month}",
@@ -249,50 +261,65 @@ else:
                 type="primary" if is_selected else "secondary",
             )
 
+    st.subheader(f"Top Artists for {calendar.month_name[state.selected_month]}, {selected_year}")
 
     artist_monthly_selected = year_data.filter(pl.col("month_played") == state.selected_month)
 
-
-
-    ranked_artists_per_month = (
-        artist_monthly_selected.with_columns(
-            pl.col("min_listened").rank("ordinal", descending=True).alias("rank")
+    if artist_monthly_selected.shape[0] == 0:
+        st.info("No data available for the current selection.")
+    else:
+        ranked_artists_per_month = (
+            artist_monthly_selected.with_columns(
+                pl.col("min_listened").rank("ordinal", descending=True).alias("rank")
+            )
+            .sort(["rank"])
         )
-        .sort(["rank"])
-    )
 
-    event = st.dataframe(
-        ranked_artists_per_month,
-        column_config={
-            "rank": st.column_config.NumberColumn("🔢", format="#%d", width=15),
-            "image": st.column_config.ImageColumn(""),
-            "artist_id": None,
-            "name": st.column_config.Column(""),
-            "min_listened": st.column_config.NumberColumn(
-                "⏳", format="%d min", help="Time listened in minutes"
-            ),
-            "genres": st.column_config.Column("🎶", help="Genres"),
-            "popularity": st.column_config.ProgressColumn(
-                "🌟", format="%f", min_value=0, max_value=100, help="Popularity"
-            ),
-            "followers": st.column_config.Column("👥", help="Followers"),
-        },
-        column_order=[
-            "rank",
-            "image",
-            "name",
-            "min_listened",
-            "genres",
-            "popularity",
-            "followers",
-        ],
-        hide_index=True,
-        width="stretch",
-        on_select="rerun",
-        selection_mode="single-row",
-    )
+        event = st.dataframe(
+            ranked_artists_per_month,
+            column_config={
+                "rank": st.column_config.NumberColumn("🔢", format="#%d", width=15),
+                "image": st.column_config.ImageColumn(""),
+                "artist_id": None,
+                "name": st.column_config.Column(""),
+                "min_listened": st.column_config.NumberColumn(
+                    "⏳", format="%d min", help="Time listened in minutes"
+                ),
+                "genres": st.column_config.Column("🎶", help="Genres"),
+                "popularity": st.column_config.ProgressColumn(
+                    "🌟", format="%f", min_value=0, max_value=100, help="Popularity"
+                ),
+                "followers": st.column_config.Column("👥", help="Followers"),
+            },
+            column_order=[
+                "rank",
+                "image",
+                "name",
+                "min_listened",
+                "genres",
+                "popularity",
+                "followers",
+            ],
+            hide_index=True,
+            width="stretch",
+            on_select="rerun",
+            selection_mode="single-row",
+        )
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+# LEGACY TABS
     # ---------------------------------------- TABS LAYOUT ----------------------------------------
     # t1, t2, t3 = st.tabs(["Favorites", "Metrics", "Recently Played"])
     # ---------------------------------------- TAB 1: FAVORITES ----------------------------------------
