@@ -121,7 +121,7 @@ def load_artist_monthly(_db_url: str, db_schema: str) -> DataFrame:
             popularity,
             followers,
             genres
-        from stats.artists_listened_monthly
+        from {db_schema}.artists_listened_monthly
     """
     df = cx.read_sql(conn=_db_url, query=query, return_type="polars")
 
