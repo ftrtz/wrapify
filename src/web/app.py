@@ -106,9 +106,12 @@ def card_1(month: int, month_data: dict | None, is_selected: bool = False):
         key=f"card_{month}",
     )
 
-# Selection callback
+# Selection callback (toggle behavior: clicking selected month deselects it)
 def select_month(month):
-    state.selected_month = month
+    if state.selected_month == month:
+        state.selected_month = 0
+    else:
+        state.selected_month = month
 
 column_widths = [2 if month == state.selected_month else 1 for month in range(1, 13)]
 cols = st.columns(column_widths)
@@ -132,11 +135,30 @@ for col_idx, month in enumerate(range(1, 13)):
             )
 
 # ---------------------------------------- PREPARE SELECTED MONTH DATA ----------------------------------------
-artist_monthly_selected = year_data.filter(pl.col("month_played") == state.selected_month)
-
+ 
 # Filter played data for the applied date range
-start_date = date(selected_year, state.selected_month, 1)
-end_date = date(selected_year, state.selected_month, calendar.monthrange(selected_year, state.selected_month)[1])
+if selected_year == 0:
+    # year
+    start_year = artist_monthly.filter(pl.col("year_played") > 0)["year_played"].min()
+    end_year = artist_monthly["year_played"].max()
+    # month
+    start_month = 1
+    end_month = 12
+    state.selected_month = 0
+else:
+    start_year = selected_year
+    end_year = selected_year
+    if state.selected_month == 0:
+        # whole year
+        start_month = 1
+        end_month = 12
+    else:
+        # specific month
+        start_month = state.selected_month
+        end_month = state.selected_month
+
+start_date = date(start_year, start_month, 1)
+end_date = date(end_year, end_month, calendar.monthrange(end_year, end_month)[1])
 
 played = played_raw.filter(pl.col("played_at").is_between(start_date, end_date))
 if played.shape[0] == 0:
@@ -147,7 +169,16 @@ else:
         played, artist.with_columns(pl.col("genres").list.join(", "))
     )
 
+
+    artist_monthly_selected = year_data.filter(pl.col("month_played") == state.selected_month)
+
     # ---------------------------------------- STATS CARDS ----------------------------------------
+
+    if state.selected_month == 0:
+        st.header(f"Spotify Stats for {selected_year}")
+    else:
+        st.header(f"Spotify Stats for {calendar.month_name[state.selected_month]}, {selected_year}")
+
     # --- Prepare genres
     all_genres = (
         artist_monthly_selected.select("genres")
@@ -188,8 +219,8 @@ else:
 
 
     # ---------------------------------------- ARTISTS ----------------------------------------
-    st.subheader(f"Top Artists for {calendar.month_name[state.selected_month]}, {selected_year}")
-
+    st.subheader(f"Top Artists")
+    
     if artist_monthly_selected.shape[0] == 0:
         st.info("No data available for the current selection.")
     else:

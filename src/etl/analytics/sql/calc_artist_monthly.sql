@@ -16,14 +16,13 @@ with played_artists as (
 
 calc as (
 	select
-		year_played,
-		month_played,
+		coalesce(year_played, 0) as year_played,
+		coalesce(month_played, 0) as month_played,
 		artist_id,
 		sum(duration_ms) / 1000 as sec_listened
 	from played_artists
 	group by
-		year_played,
-		month_played,
+		rollup(year_played, month_played),
 		artist_id
 ),
 
