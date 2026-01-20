@@ -54,33 +54,121 @@ with st.columns([1, 8])[0]:
 # --- YEAR SELECTION
 year_data = artist_monthly.filter(pl.col("year_played") == selected_year)
 
-# Calculate total minutes per month
-monthly_totals = year_data.group_by("month_played").agg(
-    pl.col("min_listened").sum().alias("min_total")
+# Calculate total minutes per month (fill missing months with 0)
+all_months = pl.DataFrame({"month_played": list(range(1, 13))})
+monthly_totals = (
+    all_months
+    .join(
+        year_data
+        .filter(pl.col("month_played") > 0)
+        .group_by("month_played")
+        .agg(pl.col("min_listened").sum().alias("min_total")),
+        on="month_played",
+        how="left",
+    )
+    .with_columns(
+        pl.col("min_total").fill_null(0),
+        pl.col("month_played")
+        .map_elements(lambda x: calendar.month_name[1:][x - 1], return_dtype=pl.Utf8)
+        .alias("month_name"),
+    )
+)
+# Calculate total minutes per year (fill missing years with 0)
+min_year = artist_monthly.filter(pl.col("year_played") > 0)["year_played"].min()
+max_year = artist_monthly.filter(pl.col("year_played") > 0)["year_played"].max()
+all_years = pl.DataFrame({"year_played": range(min_year, max_year + 1)})
+yearly_totals = (
+    all_years
+    .join(
+        artist_monthly
+        .filter(
+            pl.col("month_played") == 0,
+            pl.col("year_played") > 0,
+        )
+        .group_by("year_played")
+        .agg(pl.col("min_listened").sum().alias("min_total")),
+        on="year_played",
+        how="left",
+    )
+    .with_columns(pl.col("min_total").fill_null(0))
 )
 
 # Get top artist per month (highest min_listened)
 top_artist_per_month = (
     year_data.sort("min_listened", descending=True)
+    .filter(pl.col("month_played") > 0)
     .group_by("month_played")
     .first()
-    .join(monthly_totals, on="month_played")
-    .with_columns(
-        (pl.col("min_total") - pl.col("min_listened")).alias("min_others"),
-        pl.col("month_played")
-        .map_elements(lambda x: calendar.month_name[1:][x - 1], return_dtype=pl.Utf8)
-        .alias("month_name"),
-    )
-    .sort("month_played")
 )
 
 # --- MONTH SELECTION
 
-# Initialize selected month in session state (default to January)
+# Initialize selected month in session state (default to current month)
 state = st.session_state
-
 if "selected_month" not in state:
-    state.selected_month = 1
+    state.selected_month = date.today().month
+
+# ---------------------------------------- CHART ----------------------------------------
+def chart_gradient(df, x, y, color_rgb):
+
+    chart = (
+        alt.Chart(df)
+        .mark_area(
+            line={"color": f"rgba({color_rgb}, 1)"},
+            interpolate="monotone",
+            color=alt.Gradient(
+                gradient="linear",
+                stops=[
+                    alt.GradientStop(color=f"rgba({color_rgb}, 0)", offset=0),
+                    alt.GradientStop(color=f"rgba({color_rgb}, 0.7)", offset=1),
+                ],
+                x1=1,
+                x2=1,
+                y1=1,
+                y2=0,
+            ),
+        )
+        .encode(
+            alt.X(
+                f"{x}:O",
+                title=None,
+                axis=alt.Axis(
+                    labelExpr=f"{calendar.month_name[1:]}[datum.value-1]" if x == "month_played" else "datum.value",
+                    labelAngle=0
+                ),
+            ),
+            alt.Y(
+                f"{y}:Q",
+                title=None,
+                axis=alt.Axis(grid=False, labels=False, ticks=False),
+            ),
+            tooltip=[
+                alt.Tooltip("year_played:O", title="Year"),
+                alt.Tooltip("month_name:O", title="Month"),
+                alt.Tooltip("min_total:Q", title="Min listened", format=",d"),
+            ],
+        )
+    )
+    return chart
+
+
+if selected_year == 0:
+    chart = chart_gradient(
+        yearly_totals,
+        x="year_played",
+        y="min_total",
+        color_rgb="29, 185, 84"
+    )
+
+else:
+    chart = chart_gradient(
+        monthly_totals,
+        x="month_played",
+        y="min_total",
+        color_rgb="29, 185, 84"
+    )
+
+st.altair_chart(chart, height=200, width="stretch")
 
 # ---------------------------------------- MONTHLY CARDS ----------------------------------------
 
@@ -175,7 +263,8 @@ else:
     # ---------------------------------------- STATS CARDS ----------------------------------------
 
     if state.selected_month == 0:
-        st.header(f"Spotify Stats for {selected_year}")
+        year_text = selected_year if selected_year > 0 else "All Years"
+        st.header(f"Spotify Stats for {year_text}")
     else:
         st.header(f"Spotify Stats for {calendar.month_name[state.selected_month]}, {selected_year}")
 
@@ -220,7 +309,7 @@ else:
 
     # ---------------------------------------- ARTISTS ----------------------------------------
     st.subheader(f"Top Artists")
-    
+
     if artist_monthly_selected.shape[0] == 0:
         st.info("No data available for the current selection.")
     else:
