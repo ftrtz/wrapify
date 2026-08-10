@@ -34,7 +34,7 @@ SQL_PATH = Path("src/etl/sql")
 # Secrets & Auth setup (lazy loaded)
 # ----------------------------------------------------------------------
 def _setup_spotify_cache():
-    """Set up Spotify OAuth cache from Prefect blocks (called on first use)."""
+    """Write the Spotify OAuth token cache from the Prefect token block."""
     spotify_access_block = Secret.load("spotify-access-token")
     CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(CACHE_PATH, "w") as f:
@@ -46,9 +46,10 @@ def get_spotify_client():
     # Load blocks lazily (only when needed, not at module import time)
     spotipy_block = Secret.load("spotipy")
 
-    # Set up cache if it doesn't exist
-    if not CACHE_PATH.exists():
-        _setup_spotify_cache()
+    # Always (re)seed the cache from the token block so the block stays the
+    # source of truth. A stale or empty cache file (e.g. one accidentally
+    # baked into the image) must never shadow an updated block.
+    _setup_spotify_cache()
 
     creds = spotipy_block.get()
     return spotipy.Spotify(
