@@ -10,13 +10,14 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=0
 
-# Copy dependency files and source code needed for package build
-COPY pyproject.toml uv.lock* README.md ./
-COPY src ./src
+# Only the dependency metadata - the source is copied into the final stage, so
+# this layer is reused as long as the lockfile is unchanged.
+COPY pyproject.toml uv.lock ./
 
-# Install dependencies (without dev)
+# Install ONLY the web extra (no dev, no project) so the image does not carry
+# the ETL or API dependency trees.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-dev
+    uv sync --locked --no-dev --no-install-project --no-default-groups --extra web
 
 # Final stage
 FROM python:3.13-slim-bookworm AS final
@@ -31,7 +32,8 @@ COPY src/web ./src/web
 
 # Ensure the venv is used by default
 ENV PATH="/app/.venv/bin:$PATH" \
-    PYTHONPATH="/app:$PYTHONPATH"
+    PYTHONPATH="/app/src" \
+    PYTHONDONTWRITEBYTECODE=1
 
 # Expose Streamlit default port
 EXPOSE 8501

@@ -70,6 +70,22 @@ uv run ruff check --fix .
 ```
 
 ### Docker
+
+Each service has its own dependency set, so the three images are disjoint rather
+than identical copies of the full environment. Dependencies live in
+`[project.optional-dependencies]` in `pyproject.toml` as the extras `etl`, `api`
+and `web`; each Dockerfile installs exactly one of them with
+`uv sync --locked --no-dev --no-install-project --no-default-groups --extra <svc>`.
+
+- Adding a dependency means adding it to the extra of the service that imports
+  it - the top-level `dependencies` list is intentionally empty, and anything put
+  there lands in all three images.
+- The `dev` group depends on `wrapify[etl,api,web]`, so a plain `uv sync` still
+  builds a full local environment with all three services' dependencies.
+- Images get the source via `COPY src/<service>` plus `PYTHONPATH=/app/src`; the
+  project itself is not installed into the venv (`--no-install-project`), which
+  also keeps the dependency layer cached on `uv.lock` alone.
+
 ```bash
 # Start all services (API, dashboard, ETL, and PostgreSQL)
 docker compose up

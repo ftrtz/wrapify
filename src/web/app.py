@@ -1,7 +1,6 @@
 from datetime import timedelta, date
 
 import streamlit as st
-from streamlit_extras.mandatory_date_range import date_range_picker
 from annotated_text import annotated_text
 import altair as alt
 import polars as pl
@@ -9,6 +8,7 @@ import os
 
 from web.load_tables import load_played_joined, load_artist, load_track, load_audio_features
 from web.transform_tables import get_top_artists_played, get_top_tracks_played
+from web.widgets import date_range_picker
 
 # ========== STREAMLIT CONFIG
 st.set_page_config(layout="wide")
