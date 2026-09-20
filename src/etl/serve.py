@@ -8,68 +8,10 @@ This script:
 """
 
 from prefect import serve
-from prefect.automations import Automation
-from prefect.events.schemas.automations import EventTrigger
-from prefect.events.actions import RunDeployment
-from prefect.settings import PREFECT_API_URL
-import httpx
-import time
 
 from etl.analytics.flow import analytics_flow
 from etl.flow import spotify_etl
-
-
-def setup_automation():
-    """Set up automation to trigger analytics when insert_prod completes."""
-    # Check if automation already exists
-    try:
-        existing = Automation.read(name="analytics-on-insert-prod-completion")
-        print(f"✓ Automation already configured: analytics-flow runs when insert_prod completes")
-        return
-    except Exception:
-        pass
-
-    # Wait briefly for deployments to be registered
-    print("Setting up automation...")
-    time.sleep(2)
-
-    # Get analytics deployment ID
-    try:
-        response = httpx.post(
-            f"{PREFECT_API_URL.value()}/deployments/filter",
-            json={"deployments": {"name": {"any_": ["analytics-flow"]}}, "limit": 1},
-            timeout=10.0
-        )
-
-        if response.status_code != 200 or not (deployments := response.json()):
-            print("⚠ Could not find analytics-flow deployment yet - automation not created")
-            print("  Run 'uv run python -m etl.setup_automation' after serve starts")
-            return
-
-        deployment_id = deployments[0]["id"]
-
-        # Create automation with wildcard to match task names like "insert_prod-603"
-        automation = Automation(
-            name="analytics-on-insert-prod-completion",
-            description="Run analytics when ETL insert_prod task completes",
-            enabled=True,
-            trigger=EventTrigger(
-                expect={"prefect.task-run.Completed"},
-                match={"prefect.resource.name": "insert_prod*"},
-                posture="Reactive",
-                threshold=1,
-                within=0,
-            ),
-            actions=[RunDeployment(source="selected", deployment_id=deployment_id)],
-        )
-
-        created = automation.create()
-        print(f"✓ Created automation to run analytics-flow when insert_prod task completes")
-        print(f"  Automation ID: {created.id}")
-    except Exception as e:
-        print(f"⚠ Could not create automation: {e}")
-        print("  Run 'uv run python -m etl.setup_automation' manually after serve starts")
-
+from etl.setup_automation import setup_automation
 
 if __name__ == "__main__":
     # Create deployment for main ETL flow
@@ -87,8 +29,16 @@ if __name__ == "__main__":
         description="Calculate listening statistics from raw data",
     )
 
-    # Set up automation before serving
-    setup_automation()
+    # Register the analytics deployment up front so the automation can bind to a
+    # real deployment ID. to_deployment() only builds an object in memory -
+    # without this, the automation would be wired to whatever was registered by
+    # a previous run (or nothing at all on a first start). apply() upserts, so
+    # serve() below reuses the same deployment.
+    try:
+        setup_automation(analytics_deployment.apply())
+    except Exception as e:
+        print(f"⚠ Could not register analytics deployment for automation: {e}")
+        print("  Run 'uv run python -m etl.setup_automation' after serve starts")
 
     # Serve both flows in one process
     print("\nServing flows...")

@@ -248,7 +248,9 @@ When modifying the dashboard:
   - Automation is set up automatically by `serve.py` on startup
   - Uses task event matching with wildcards (`insert_prod*`) to handle Prefect's random task name suffixes
   - Only triggers when new data is available (conditional execution in ETL flow)
-- **Manual Automation Setup**: If automation fails to create automatically, run `uv run python -m etl.setup_automation` manually
+  - `serve.py` calls `analytics_deployment.apply()` before `setup_automation()` so the automation binds to a real deployment ID rather than whatever a previous run registered
+  - Reconciled on **every** startup: if the stored `RunDeployment` action points at a deployment that no longer exists (server DB reset, flow rename, deployment deleted), it is rewritten in place. A stale ID fails silently - the event matches and the automation fires, but the run request 404s and no flow run is ever created
+- **Manual Automation Setup**: If automation fails to create automatically, or you need to repair a stale automation without restarting the container, run `uv run python -m etl.setup_automation` (implemented in `src/etl/setup_automation.py`)
 - **Health Monitoring**: ETL container exposes health endpoint at `http://localhost:8080/health`
 - **Tests**: Use pytest without fixtures currently - sample data is constructed inline
 - **Database**: All services require PostgreSQL connection - use Docker Compose postgres service or external DB
