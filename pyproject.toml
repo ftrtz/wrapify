@@ -8,25 +8,42 @@ version = "0.1.0"
 description = "Spotify listening analytics platform with ETL pipeline, API and dashboard"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = [
-    # ETL dependencies
+# Shared by every service. Keep this list minimal - anything added here lands in
+# all three images.
+dependencies = []
+
+# Per-service dependency sets. Each Docker image installs exactly one extra
+# (`uv sync --extra etl`), so the images stay disjoint instead of identical.
+[project.optional-dependencies]
+etl = [
     "pandas>=2.3.1",
     "spotipy>=2.25.1",
     "sqlalchemy>=2.0.43",
     "psycopg2-binary>=2.9.10",
-    # API dependencies
+    "prefect[sqlalchemy]>=3.6.2",
+    "jinja2>=3.1.0",
+    "python-dateutil>=2.9.0",
+]
+api = [
     "fastapi[standard]>=0.116.1",
     "uvicorn>=0.35.0",
-    # Dashboard dependencies
+    "sqlalchemy>=2.0.43",
+    "psycopg2-binary>=2.9.10",
+]
+web = [
     "polars>=1.31.0",
     "connectorx>=0.4.4",
     "streamlit>=1.47.0",
-    "streamlit-extras>=0.7.5",
-    "prefect[sqlalchemy]>=3.6.2",
+    # Only the `annotated_text` helper is needed; the full `streamlit-extras`
+    # package drags in plotly/matplotlib/snowflake/botocore (~200MB).
+    "st-annotated-text>=4.0.0",
+    "altair>=5.0.0",
 ]
 
 [dependency-groups]
 dev = [
+    # Pull in every service's deps so a plain `uv sync` gives a full local env
+    "wrapify[etl,api,web]",
     "pytest>=8.4.1",
     "ruff>=0.12.4",
     "notebook>=7.4.4",
