@@ -1,9 +1,8 @@
-from datetime import timedelta, date
+from datetime import date
 import calendar
 
 import streamlit as st
 from streamlit_card import card
-from annotated_text import annotated_text
 import altair as alt
 import polars as pl
 import os
@@ -15,8 +14,7 @@ from web.load_tables import (
     load_audio_features,
     load_artist_monthly,
 )
-from web.transform_tables import get_top_artists_played, get_top_tracks_played
-from web.widgets import date_range_picker
+from web.transform_tables import get_top_artists_played
 
 # for local development - python-dotenv is a dev dependency, absent from the web image
 try:

@@ -811,12 +811,6 @@ wheels = [
 ]
 
 [[package]]
-name = "htbuilder"
-version = "0.9.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/be/88/0f48d1125168e9eea33879ea820000702533d103f1123d27ca69839a0db4/htbuilder-0.9.0.tar.gz", hash = "sha256:58c0bc5502c1a46b42ae9e074c43ec0f6fdc24ed334936cb17e1ed5a8938aee2", size = 10591, upload-time = "2025-01-09T07:00:26.189Z" }
-
-[[package]]
 name = "httpcore"
 version = "1.0.9"
 source = { registry = "https://pypi.org/simple" }
@@ -2938,18 +2932,6 @@ asyncio = [
 ]
 
 [[package]]
-name = "st-annotated-text"
-version = "4.0.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "htbuilder" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/4d/76/c0f64a56b779bfb5c87437687a9970d12dad37b5aea2541823d0c5010818/st_annotated_text-4.0.2.tar.gz", hash = "sha256:b0134dcf734697cc3dbdb11862c4174071e7fb6f365af55a37c710d357fd88a5", size = 7915, upload-time = "2025-01-23T15:09:02.88Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d9/70/f29d4359ddfd1a0afa00065e4dac32bd4931f589185f5f0f499db9aee4fe/st_annotated_text-4.0.2-py3-none-any.whl", hash = "sha256:712c45821f020eccafad3a58c10b9d2d51d449f4db999a06308ecf39a753a4df", size = 9084, upload-time = "2025-01-23T15:09:00.863Z" },
-]
-
-[[package]]
 name = "stack-data"
 version = "0.6.3"
 source = { registry = "https://pypi.org/simple" }
@@ -3454,7 +3436,6 @@ web = [
     { name = "altair" },
     { name = "connectorx" },
     { name = "polars" },
-    { name = "st-annotated-text" },
     { name = "streamlit" },
     { name = "streamlit-card" },
 ]
@@ -3483,7 +3464,6 @@ requires-dist = [
     { name = "spotipy", marker = "extra == 'etl'", specifier = ">=2.25.1" },
     { name = "sqlalchemy", marker = "extra == 'api'", specifier = ">=2.0.43" },
     { name = "sqlalchemy", marker = "extra == 'etl'", specifier = ">=2.0.43" },
-    { name = "st-annotated-text", marker = "extra == 'web'", specifier = ">=4.0.0" },
     { name = "streamlit", marker = "extra == 'web'", specifier = ">=1.52.0" },
     { name = "streamlit-card", marker = "extra == 'web'", specifier = ">=1.0.2" },
     { name = "uvicorn", marker = "extra == 'api'", specifier = ">=0.35.0" },
