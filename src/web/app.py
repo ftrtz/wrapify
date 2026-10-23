@@ -63,7 +63,12 @@ def select_year(year: int):
 
 # year 0 is the analytics rollup over all years - listed first, but the page opens
 # on the latest year (set via session state rather than option order)
-years = artist_monthly.filter(pl.col("year_played") > 0)["year_played"].unique().sort(descending=True).to_list()
+years = (
+    artist_monthly.filter(pl.col("year_played") > 0)["year_played"]
+    .unique()
+    .sort(descending=True)
+    .to_list()
+)
 if "selected_year" not in state:
     state.selected_year = years[0]
 
@@ -82,9 +87,9 @@ with st.container(horizontal=True, horizontal_alignment="distribute", vertical_a
     chart_mode = st.segmented_control(
         "Chart",
         options=["per_period", "cumulative"],
-        format_func=lambda m: ("Yearly" if selected_year == 0 else "Monthly")
-        if m == "per_period"
-        else "Cumulative",
+        format_func=lambda m: (
+            ("Yearly" if selected_year == 0 else "Monthly") if m == "per_period" else "Cumulative"
+        ),
         default="per_period",
         required=True,
         key="chart_mode",
@@ -98,58 +103,50 @@ year_data = artist_monthly.filter(pl.col("year_played") == selected_year)
 # First and last month with any data, as (year, month) - months outside this range
 # have no data yet (or anymore) rather than zero listening, so they stay null
 dated = artist_monthly.filter(pl.col("year_played") > 0, pl.col("month_played") > 0)
-first_month = dated.select("year_played", "month_played").sort(["year_played", "month_played"]).row(0)
-last_month = dated.select("year_played", "month_played").sort(["year_played", "month_played"]).row(-1)
+first_month = (
+    dated.select("year_played", "month_played").sort(["year_played", "month_played"]).row(0)
+)
+last_month = (
+    dated.select("year_played", "month_played").sort(["year_played", "month_played"]).row(-1)
+)
 
 # Calculate total minutes per month (fill missing months within the data range with 0)
 all_months = pl.DataFrame({"month_played": list(range(1, 13))})
-monthly_totals = (
-    all_months
-    .join(
-        year_data
-        .filter(pl.col("month_played") > 0)
-        .group_by("month_played")
-        .agg(pl.col("min_listened").sum().alias("min_total")),
-        on="month_played",
-        how="left",
+monthly_totals = all_months.join(
+    year_data.filter(pl.col("month_played") > 0)
+    .group_by("month_played")
+    .agg(pl.col("min_listened").sum().alias("min_total")),
+    on="month_played",
+    how="left",
+).with_columns(
+    pl.when(
+        pl.lit(selected_year * 100) + pl.col("month_played") < first_month[0] * 100 + first_month[1]
     )
-    .with_columns(
-        pl.when(
-            pl.lit(selected_year * 100) + pl.col("month_played")
-            < first_month[0] * 100 + first_month[1]
-        )
-        .then(None)
-        .when(
-            pl.lit(selected_year * 100) + pl.col("month_played")
-            > last_month[0] * 100 + last_month[1]
-        )
-        .then(None)
-        .otherwise(pl.col("min_total").fill_null(0))
-        .alias("min_total"),
-        pl.col("month_played")
-        .map_elements(lambda x: calendar.month_name[1:][x - 1], return_dtype=pl.Utf8)
-        .alias("month_name"),
+    .then(None)
+    .when(
+        pl.lit(selected_year * 100) + pl.col("month_played") > last_month[0] * 100 + last_month[1]
     )
+    .then(None)
+    .otherwise(pl.col("min_total").fill_null(0))
+    .alias("min_total"),
+    pl.col("month_played")
+    .map_elements(lambda x: calendar.month_name[1:][x - 1], return_dtype=pl.Utf8)
+    .alias("month_name"),
 )
 # Calculate total minutes per year (fill missing years with 0)
 min_year = artist_monthly.filter(pl.col("year_played") > 0)["year_played"].min()
 max_year = artist_monthly.filter(pl.col("year_played") > 0)["year_played"].max()
 all_years = pl.DataFrame({"year_played": range(min_year, max_year + 1)})
-yearly_totals = (
-    all_years
-    .join(
-        artist_monthly
-        .filter(
-            pl.col("month_played") == 0,
-            pl.col("year_played") > 0,
-        )
-        .group_by("year_played")
-        .agg(pl.col("min_listened").sum().alias("min_total")),
-        on="year_played",
-        how="left",
+yearly_totals = all_years.join(
+    artist_monthly.filter(
+        pl.col("month_played") == 0,
+        pl.col("year_played") > 0,
     )
-    .with_columns(pl.col("min_total").fill_null(0))
-)
+    .group_by("year_played")
+    .agg(pl.col("min_listened").sum().alias("min_total")),
+    on="year_played",
+    how="left",
+).with_columns(pl.col("min_total").fill_null(0))
 
 # Get top artist per month (highest min_listened)
 top_artist_per_month = (
@@ -162,6 +159,7 @@ top_artist_per_month = (
 # --- MONTH SELECTION
 if "selected_month" not in state:
     state.selected_month = default_month(selected_year)
+
 
 # ---------------------------------------- CHART ----------------------------------------
 def chart_gradient(df, x, y, color_rgb):
@@ -235,9 +233,9 @@ def chart_gradient(df, x, y, color_rgb):
     guide = base.mark_rule(color=color, strokeDash=[3, 3]).encode(
         opacity=alt.when(hover).then(alt.value(0.5)).otherwise(alt.value(0))
     )
-    point = base.mark_point(filled=True, size=90, color=color, stroke="white", strokeWidth=1.5).encode(
-        y_enc, opacity=alt.when(hover).then(alt.value(1)).otherwise(alt.value(0))
-    )
+    point = base.mark_point(
+        filled=True, size=90, color=color, stroke="white", strokeWidth=1.5
+    ).encode(y_enc, opacity=alt.when(hover).then(alt.value(1)).otherwise(alt.value(0)))
     return alt.layer(area, guide, point, selectors)
 
 
@@ -276,6 +274,7 @@ with st.container(key="listening_chart"):
     )
 
 # ---------------------------------------- MONTHLY CARDS ----------------------------------------
+
 
 # Selection callback (toggle behavior: clicking selected month deselects it)
 def select_month(month):
@@ -409,7 +408,6 @@ else:
         played, artist.with_columns(pl.col("genres").list.join(", "))
     )
 
-
     artist_monthly_selected = year_data.filter(pl.col("month_played") == state.selected_month)
 
     # ---------------------------------------- STATS CARDS ----------------------------------------
@@ -500,12 +498,9 @@ else:
     if artist_monthly_selected.shape[0] == 0:
         st.info("No data available for the current selection.")
     else:
-        ranked_artists_per_month = (
-            artist_monthly_selected.with_columns(
-                pl.col("min_listened").rank("ordinal", descending=True).alias("rank")
-            )
-            .sort(["rank"])
-        )
+        ranked_artists_per_month = artist_monthly_selected.with_columns(
+            pl.col("min_listened").rank("ordinal", descending=True).alias("rank")
+        ).sort(["rank"])
 
         event = st.dataframe(
             ranked_artists_per_month,
@@ -521,7 +516,9 @@ else:
                 "popularity": st.column_config.ProgressColumn(
                     "🌟", format="%f", min_value=0, max_value=100, help="Popularity"
                 ),
-                "followers": st.column_config.NumberColumn("👥", help="Followers", format="localized"),
+                "followers": st.column_config.NumberColumn(
+                    "👥", help="Followers", format="localized"
+                ),
             },
             column_order=[
                 "rank",
