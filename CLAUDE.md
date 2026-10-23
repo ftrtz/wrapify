@@ -48,6 +48,33 @@ uv run uvicorn api.main:app --reload
 uv run streamlit run src/web/app.py
 ```
 
+#### Developing Against the Remote Database
+
+The production database runs in the `wrapify-postgres` container on another
+machine and does not publish its port, so reach it through an SSH tunnel to the
+container's docker-network IP (it can change when the container is recreated):
+
+```bash
+# Look up the container IP, then tunnel localhost:5432 to it
+ssh <server> docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' wrapify-postgres
+ssh -f -N -L 5432:<container-ip>:5432 <server>
+```
+
+Local `.env` (gitignored) then sets `DB_HOST=localhost` plus the `POSTGRES_*`/`DB_*`
+credentials, and `ANALYTICS_SCHEMA=stats_dev`. With that, analytics runs read
+`prod` and write only `stats_dev`, and the dashboard reads `stats_dev` - so
+analytics SQL changes can be tested on real data without touching production
+`stats`:
+
+```bash
+# Rebuild stats_dev (--env-file is needed: Prefect only reads PREFECT_* from .env)
+uv run --env-file .env python -m etl.analytics.flow
+```
+
+When `DB_HOST` is set, the analytics flow connects via the env vars instead of the
+`spotify-postgresql` block (whose host only resolves inside docker), and refuses
+to run against the production `stats` schema.
+
 ### Testing and Code Quality
 ```bash
 # Run all tests
