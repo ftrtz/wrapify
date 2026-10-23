@@ -18,10 +18,13 @@ from web.load_tables import (
 from web.transform_tables import get_top_artists_played, get_top_tracks_played
 from web.widgets import date_range_picker
 
-# for local development
-from dotenv import load_dotenv
+# for local development - python-dotenv is a dev dependency, absent from the web image
+try:
+    from dotenv import load_dotenv
 
-load_dotenv()
+    load_dotenv()
+except ImportError:
+    pass
 
 # ========== STREAMLIT CONFIG
 st.set_page_config(layout="wide")
