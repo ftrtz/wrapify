@@ -32,7 +32,8 @@ st.set_page_config(layout="wide")
 # ========== DATABASE CONNECTION
 db_url = f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_SECRET')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
 prod_schema = "prod"
-stats_schema = "stats"
+# set ANALYTICS_SCHEMA=stats_dev locally to read stats built by a local analytics run
+stats_schema = os.getenv("ANALYTICS_SCHEMA", "stats")
 
 # ========== LOAD DATA
 # --- From stats schema
