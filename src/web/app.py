@@ -47,8 +47,11 @@ st.title("Spotify Dashboard")
 
 with st.columns([1, 8])[0]:
     selected_year = st.selectbox(
-        "",
+        "Year",
         options=artist_monthly["year_played"].unique().sort(descending=True).to_list(),
+        label_visibility="collapsed",
+        # year 0 is the analytics rollup over all years
+        format_func=lambda y: "All years" if y == 0 else str(y),
         placeholder="Select Year",
     )
 
