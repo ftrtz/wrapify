@@ -56,7 +56,13 @@ with st.columns([1, 8])[0]:
 # --- YEAR SELECTION
 year_data = artist_monthly.filter(pl.col("year_played") == selected_year)
 
-# Calculate total minutes per month (fill missing months with 0)
+# First and last month with any data, as (year, month) - months outside this range
+# have no data yet (or anymore) rather than zero listening, so they stay null
+dated = artist_monthly.filter(pl.col("year_played") > 0, pl.col("month_played") > 0)
+first_month = dated.select("year_played", "month_played").sort(["year_played", "month_played"]).row(0)
+last_month = dated.select("year_played", "month_played").sort(["year_played", "month_played"]).row(-1)
+
+# Calculate total minutes per month (fill missing months within the data range with 0)
 all_months = pl.DataFrame({"month_played": list(range(1, 13))})
 monthly_totals = (
     all_months
@@ -69,7 +75,18 @@ monthly_totals = (
         how="left",
     )
     .with_columns(
-        pl.col("min_total").fill_null(0),
+        pl.when(
+            pl.lit(selected_year * 100) + pl.col("month_played")
+            < first_month[0] * 100 + first_month[1]
+        )
+        .then(None)
+        .when(
+            pl.lit(selected_year * 100) + pl.col("month_played")
+            > last_month[0] * 100 + last_month[1]
+        )
+        .then(None)
+        .otherwise(pl.col("min_total").fill_null(0))
+        .alias("min_total"),
         pl.col("month_played")
         .map_elements(lambda x: calendar.month_name[1:][x - 1], return_dtype=pl.Utf8)
         .alias("month_name"),
@@ -134,6 +151,8 @@ def chart_gradient(df, x, y, color_rgb):
             alt.X(
                 f"{x}:O",
                 title=None,
+                # keep months without data (null) on the axis instead of dropping them
+                scale=alt.Scale(domain=df[x].to_list()),
                 axis=alt.Axis(
                     labelExpr=f"{calendar.month_name[1:]}[datum.value-1]" if x == "month_played" else "datum.value",
                     labelAngle=0
@@ -144,10 +163,12 @@ def chart_gradient(df, x, y, color_rgb):
                 title=None,
                 axis=alt.Axis(grid=False, labels=False, ticks=False),
             ),
+            # monthly data has no year column and yearly data no month name
             tooltip=[
-                alt.Tooltip("year_played:O", title="Year"),
-                alt.Tooltip("month_name:O", title="Month"),
-                alt.Tooltip("min_total:Q", title="Min listened", format=",d"),
+                alt.Tooltip("month_name:O", title="Month")
+                if x == "month_played"
+                else alt.Tooltip("year_played:O", title="Year"),
+                alt.Tooltip(f"{y}:Q", title="Min listened", format=",d"),
             ],
         )
     )
@@ -225,7 +246,7 @@ for col_idx, month in enumerate(range(1, 13)):
             )
 
 # ---------------------------------------- PREPARE SELECTED MONTH DATA ----------------------------------------
- 
+
 # Filter played data for the applied date range
 if selected_year == 0:
     # year
