@@ -114,7 +114,7 @@ def load_artist_monthly(_db_url: str, db_schema: str) -> DataFrame:
         select
             year_played,
             month_played,
-            sec_listened/60 as min_listened,
+            ms_listened::float / 60000 as min_listened,
             artist_id,
             name,
             image,

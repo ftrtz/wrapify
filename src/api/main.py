@@ -39,11 +39,11 @@ def get_top_artist(
             artist_id,
             name,
             image,
-            sec_listened/60 as min_listened
+            ms_listened::float / 60000 as min_listened
         from stats.artists_listened_monthly
         where year_played = :year
             and month_played = :month
-        order by sec_listened desc
+        order by ms_listened desc
         limit 1;
     """)
 
@@ -59,7 +59,7 @@ def get_top_artist(
         "artist_id": result.artist_id,
         "name": result.name,
         "image": result.image,
-        "min_listened": int(result.min_listened),
+        "min_listened": round(result.min_listened),
     }
 
 

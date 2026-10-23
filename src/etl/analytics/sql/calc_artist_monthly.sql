@@ -19,7 +19,7 @@ calc as (
 		coalesce(year_played, 0) as year_played,
 		coalesce(month_played, 0) as month_played,
 		artist_id,
-		sum(duration_ms) / 1000 as sec_listened
+		sum(duration_ms) as ms_listened
 	from played_artists
 	group by
 		rollup(year_played, month_played),
@@ -30,7 +30,7 @@ artist_info as (
 	select
 		artist_stats.year_played,
 		artist_stats.month_played,
-		artist_stats.sec_listened,
+		artist_stats.ms_listened,
 		artist_stats.artist_id,
 		artist.name,
 		artist.images->1->'url'->>0 as image,
