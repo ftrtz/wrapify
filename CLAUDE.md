@@ -48,6 +48,33 @@ uv run uvicorn api.main:app --reload
 uv run streamlit run src/web/app.py
 ```
 
+#### Developing Against the Remote Database
+
+The production database runs in the `wrapify-postgres` container on another
+machine and does not publish its port, so reach it through an SSH tunnel to the
+container's docker-network IP (it can change when the container is recreated):
+
+```bash
+# Look up the container IP, then tunnel localhost:5432 to it
+ssh <server> docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' wrapify-postgres
+ssh -f -N -L 5432:<container-ip>:5432 <server>
+```
+
+Local `.env` (gitignored) then sets `DB_HOST=localhost` plus the `POSTGRES_*`/`DB_*`
+credentials, and `ANALYTICS_SCHEMA=stats_dev`. With that, analytics runs read
+`prod` and write only `stats_dev`, and the dashboard reads `stats_dev` - so
+analytics SQL changes can be tested on real data without touching production
+`stats`:
+
+```bash
+# Rebuild stats_dev (--env-file is needed: Prefect only reads PREFECT_* from .env)
+uv run --env-file .env python -m etl.analytics.flow
+```
+
+When `DB_HOST` is set, the analytics flow connects via the env vars instead of the
+`spotify-postgresql` block (whose host only resolves inside docker), and refuses
+to run against the production `stats` schema.
+
 ### Testing and Code Quality
 ```bash
 # Run all tests
@@ -222,7 +249,17 @@ Use module-style imports when running with `uv run`:
 
 - `load_tables.py`: Loads data from PostgreSQL using polars + connectorx (fast!)
 - `transform_tables.py`: Aggregation functions for dashboard (top artists/tracks)
-- `app.py`: Streamlit multi-page app with tabs for Favorites, Metrics, Recently Played
+- `app.py`: Streamlit app - year selector, listening-time area chart, month cards, stats and top artists for the selected year/month
+- `artist_cards/`: the top-artist cards (one per month for a year, one per year for
+  "All years"), a Custom Components v2 element (`st.components.v2`,
+  inline HTML/CSS/JS in the page, no iframe; needs Streamlit >= 1.51). Styles and
+  logic live in `style.css` / `main.js`, read at import - restart Streamlit after
+  editing them. The area chart positions each point over its card via
+  `card_centers()` (which mirrors the wide layout: `CARD_GAP` as a percentage gap,
+  selected card flex-grow 2) - change the card sizing/gap in `style.css` and that
+  function together. Clicks come back as a `clicked` trigger; the component renders in a
+  shadow root, so DOM queries from outside (e.g. Playwright `evaluate`) must go
+  through a locator.
 
 Dashboard uses polars DataFrames (not pandas) for better performance with large datasets.
 

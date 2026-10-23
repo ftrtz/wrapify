@@ -16,16 +16,31 @@ with played_artists as (
 
 calc as (
 	select
-		year_played,
-		month_played,
+		coalesce(year_played, 0) as year_played,
+		coalesce(month_played, 0) as month_played,
 		artist_id,
-		sum(duration_ms) / 1000 as sec_listened
+		sum(duration_ms) as ms_listened
 	from played_artists
 	group by
-		year_played,
-		month_played,
+		rollup(year_played, month_played),
 		artist_id
+),
+
+artist_info as (
+	select
+		artist_stats.year_played,
+		artist_stats.month_played,
+		artist_stats.ms_listened,
+		artist_stats.artist_id,
+		artist.name,
+		artist.images->1->'url'->>0 as image,
+		artist.popularity,
+		artist.followers,
+		artist.genres
+	from calc artist_stats
+	inner join {{ prod_schema }}.artist artist
+		on artist_stats.artist_id = artist.id
 )
 
 insert into {{ analytics_schema }}.artists_listened_monthly
-select * from calc;
+select * from artist_info;

@@ -27,8 +27,9 @@ WORKDIR /app
 # Copy virtual environment from builder
 COPY --from=builder /app/.venv /app/.venv
 
-# Copy source code
+# Copy source code and the Streamlit config (read from the working directory)
 COPY src/web ./src/web
+COPY .streamlit ./.streamlit
 
 # Ensure the venv is used by default
 ENV PATH="/app/.venv/bin:$PATH" \

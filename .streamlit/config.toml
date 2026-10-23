@@ -1,0 +1,6 @@
+[theme]
+# Always dark. Defining [theme.light]/[theme.dark] instead adds a Light/Dark toggle
+# in the settings menu, but then the default follows the OS setting, not dark.
+base = "dark"
+# Spotify green, matching the selected card border and the area chart
+primaryColor = "#1DB954"

@@ -16,7 +16,9 @@ DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "spotify")
 
-DATABASE_URL = f"postgresql+psycopg2://{POSTGRES_USER}:{POSTGRES_SECRET}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+DATABASE_URL = (
+    f"postgresql+psycopg2://{POSTGRES_USER}:{POSTGRES_SECRET}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+)
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -32,18 +34,16 @@ def get_top_artist(
     """
     query = text("""
         select
-            artist_stats.year_played,
-            artist_stats.month_played,
-            artist_stats.artist_id,
-            artist.name,
-            artist.images->1->'url'->>0 as image,
-            artist_stats.sec_listened/60 as min_listened
-        from stats.artists_listened_monthly artist_stats
-        inner join prod.artist artist
-            on artist_stats.artist_id = artist.id
-        where artist_stats.year_played = :year
-            and artist_stats.month_played = :month
-        order by artist_stats.sec_listened desc
+            year_played,
+            month_played,
+            artist_id,
+            name,
+            image,
+            ms_listened::float / 60000 as min_listened
+        from stats.artists_listened_monthly
+        where year_played = :year
+            and month_played = :month
+        order by ms_listened desc
         limit 1;
     """)
 
@@ -59,9 +59,9 @@ def get_top_artist(
         "artist_id": result.artist_id,
         "name": result.name,
         "image": result.image,
-        "min_listened": int(result.min_listened)
+        "min_listened": round(result.min_listened),
     }
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     uvicorn.run(app=app, host="0.0.0.0", port=8000)
