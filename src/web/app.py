@@ -9,7 +9,6 @@ import os
 from web.load_tables import (
     load_played_joined,
     load_artist,
-    load_track,
     load_audio_features,
     load_artist_monthly,
 )
@@ -39,7 +38,6 @@ artist_monthly = load_artist_monthly(db_url, stats_schema)
 # --- From prod schema
 played_raw = load_played_joined(db_url, prod_schema)
 artist = load_artist(db_url, prod_schema)
-track = load_track(db_url, prod_schema)
 audio_features = load_audio_features(db_url, prod_schema)
 
 # ---------------------------------------- DASHBOARD ----------------------------------------
@@ -434,32 +432,67 @@ else:
     genres_count = all_genres.shape[0]
 
     # --- Overall stat cards
-    c1, c2, c3, c4, c5 = st.columns(5)
-    with c1:
-        with st.container(height=125, border=True):
-            total_time = artist_monthly_selected["min_listened"].sum()
-            st.metric(label="Total time listened", value=f"{int(total_time)} min")
-    with c2:
-        with st.container(height=125, border=True):
-            st.metric(
-                label="Different artists",
-                value=artist_monthly_selected.unique("artist_id").shape[0],
-            )
-    with c3:
-        with st.container(height=125, border=True):
-            st.metric(label="Different genres", value=genres_count)
-    with c4:
-        with st.container(height=125, border=True):
-            st.metric(label="Different tracks", value=played.unique("track_id").shape[0])
-    with c5:
-        with st.container(height=125, border=True):
-            avg_pop = played.unique("track_id")["popularity"].mean()
-            st.metric(
-                label="Average popularity of tracks",
-                value=round(avg_pop, 2),
-                delta=round(avg_pop - track["popularity"].mean(), 2),
-            )
+    # Average over plays (a track played 50 times counts 50 times), skipping
+    # popularity 0 - Spotify reports 0 for tracks no longer available, not for
+    # unpopular ones, and ~28% of tracks have it
+    def avg_popularity(plays: pl.DataFrame) -> float | None:
+        return plays.filter(pl.col("popularity") > 0)["popularity"].mean()
 
+    avg_pop = avg_popularity(played)
+    avg_all = avg_popularity(played_raw)
+    # compared against all plays - except in "All years", where that's the value
+    # itself; None when every play in the period has popularity 0
+    pop_delta = (
+        round(avg_pop - avg_all, 1)
+        if selected_year != 0 and avg_pop is not None and avg_all is not None
+        else None
+    )
+
+    # bordered metrics with height="stretch" all match the tallest card in the row
+    # (the popularity card, with its delta) instead of scrolling inside a fixed height
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric(
+        # unit in the label - "348,118 min" is too wide for the card and gets cut off
+        label="Minutes listened",
+        value=round(artist_monthly_selected["min_listened"].sum()),
+        format="localized",
+        border=True,
+        height="stretch",
+    )
+    c2.metric(
+        label="Different artists",
+        value=artist_monthly_selected.unique("artist_id").shape[0],
+        format="localized",
+        border=True,
+        height="stretch",
+    )
+    c3.metric(
+        label="Different genres",
+        value=genres_count,
+        format="localized",
+        border=True,
+        height="stretch",
+    )
+    c4.metric(
+        label="Different tracks",
+        value=played.unique("track_id").shape[0],
+        format="localized",
+        border=True,
+        height="stretch",
+    )
+    c5.metric(
+        label="Track popularity",
+        value=None if avg_pop is None else round(avg_pop, 1),
+        delta=pop_delta,
+        delta_description=None if pop_delta is None else "vs. all time",
+        # more mainstream isn't better or worse, so no green/red
+        delta_color="off",
+        help="Spotify popularity (0-100) of what you played, averaged over "
+        "plays - tracks you replay count more. Tracks Spotify reports as 0 "
+        "(usually no longer available) are left out.",
+        border=True,
+        height="stretch",
+    )
 
     # ---------------------------------------- ARTISTS ----------------------------------------
     st.subheader(f"Top Artists")
@@ -482,7 +515,7 @@ else:
                 "artist_id": None,
                 "name": st.column_config.Column(""),
                 "min_listened": st.column_config.NumberColumn(
-                    "⏳", format="%d min", help="Time listened in minutes"
+                    "⏳", format="%.0f min", help="Time listened in minutes"
                 ),
                 "genres": st.column_config.Column("🎶", help="Genres"),
                 "popularity": st.column_config.ProgressColumn(
