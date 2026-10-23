@@ -3674,18 +3674,6 @@ wheels = [
 ]
 
 [[package]]
-name = "streamlit-card"
-version = "1.0.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "streamlit" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/67/39/765f93dc09cabb8d4762714bf3a0d25892671450eda2c48e4dbdb2292d6b/streamlit_card-1.0.2.tar.gz", hash = "sha256:8001cd5edd8a6e2db36ee81f37dc645f08f78c21a2ba968403176c68b4f33cb1", size = 672326, upload-time = "2024-05-10T14:04:03.571Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/05/22/1d81bd6b2552c67f50a19501c00c7ee08022eacffb21c6900929359f7ce5/streamlit_card-1.0.2-py3-none-any.whl", hash = "sha256:f5d01ce57d6481eb3ba44e504146f56a7b82907d6700f0c19266ed6381a9c58f", size = 680848, upload-time = "2024-05-10T14:04:00.723Z" },
-]
-
-[[package]]
 name = "terminado"
 version = "0.18.1"
 source = { registry = "https://pypi.org/simple" }
@@ -4231,7 +4219,6 @@ web = [
     { name = "connectorx" },
     { name = "polars" },
     { name = "streamlit" },
-    { name = "streamlit-card" },
 ]
 
 [package.dev-dependencies]
@@ -4259,7 +4246,6 @@ requires-dist = [
     { name = "sqlalchemy", marker = "extra == 'api'", specifier = ">=2.1.6" },
     { name = "sqlalchemy", marker = "extra == 'etl'", specifier = ">=2.1.6" },
     { name = "streamlit", marker = "extra == 'web'", specifier = ">=1.66.1" },
-    { name = "streamlit-card", marker = "extra == 'web'", specifier = ">=1.0.2" },
     { name = "uvicorn", marker = "extra == 'api'", specifier = ">=0.54.0" },
 ]
 provides-extras = ["etl", "api", "web"]

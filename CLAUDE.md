@@ -249,7 +249,14 @@ Use module-style imports when running with `uv run`:
 
 - `load_tables.py`: Loads data from PostgreSQL using polars + connectorx (fast!)
 - `transform_tables.py`: Aggregation functions for dashboard (top artists/tracks)
-- `app.py`: Streamlit multi-page app with tabs for Favorites, Metrics, Recently Played
+- `app.py`: Streamlit app - year selector, listening-time area chart, month cards, stats and top artists for the selected year/month
+- `artist_cards/`: the top-artist cards (one per month for a year, one per year for
+  "All years"), a Custom Components v2 element (`st.components.v2`,
+  inline HTML/CSS/JS in the page, no iframe; needs Streamlit >= 1.51). Styles and
+  logic live in `style.css` / `main.js`, read at import - restart Streamlit after
+  editing them. Clicks come back as a `clicked` trigger; the component renders in a
+  shadow root, so DOM queries from outside (e.g. Playwright `evaluate`) must go
+  through a locator.
 
 Dashboard uses polars DataFrames (not pandas) for better performance with large datasets.
 

@@ -1,0 +1,136 @@
+/* sizes against the space Streamlit gives the component, not the window */
+.wrap {
+    container-type: inline-size;
+}
+
+.strip {
+    position: relative; /* offsetParent for centering the selected tile */
+    display: flex;
+    gap: 0.6rem;
+}
+
+.tile {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+    aspect-ratio: 1 / 2;
+    padding: 0;
+    overflow: hidden;
+    border: 3px solid transparent;
+    border-radius: var(--st-base-radius, 10px);
+    background: var(--st-secondary-background-color);
+    cursor: pointer;
+    transition: transform 150ms ease, border-color 150ms ease, flex-grow 200ms ease;
+    font: inherit;
+    color: #fff;
+}
+
+.tile img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.tile:hover {
+    transform: translateY(-3px);
+}
+
+.tile:focus-visible {
+    outline: 2px solid var(--st-primary-color);
+    outline-offset: 2px;
+}
+
+.tile.selected {
+    border-color: var(--st-primary-color);
+    flex-grow: 2;
+    aspect-ratio: auto;
+}
+
+/* periods without data */
+.tile.empty {
+    cursor: default;
+    opacity: 0.35;
+}
+
+.tile.empty:hover {
+    transform: none;
+}
+
+.badge {
+    position: absolute;
+    left: 6px;
+    top: 6px;
+    padding: 1px 6px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.55);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.info {
+    position: absolute;
+    inset: auto 0 0 0;
+    padding: 2rem 0.5rem 0.5rem;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.9));
+    text-align: left;
+    font-size: 0.75rem;
+    line-height: 1.3;
+    opacity: 0;
+    transition: opacity 150ms ease;
+}
+
+.info span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.info .artist {
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.info .song {
+    opacity: 0.8;
+}
+
+.tile:hover .info,
+.tile:focus-visible .info,
+.tile.selected .info {
+    opacity: 1;
+}
+
+/* tablet: two rows of six, the selected card is highlighted but not widened */
+@container (max-width: 900px) {
+    .strip {
+        flex-wrap: wrap;
+    }
+
+    .tile,
+    .tile.selected {
+        flex: 0 0 calc((100% - 5 * 0.6rem) / 6);
+        aspect-ratio: 4 / 5;
+    }
+}
+
+/* phone: one swipeable row, info always shown since there is no hover */
+@container (max-width: 520px) {
+    .strip {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        padding-bottom: 4px;
+    }
+
+    .tile,
+    .tile.selected {
+        flex: 0 0 30%;
+        scroll-snap-align: start;
+    }
+
+    .info {
+        opacity: 1;
+    }
+}

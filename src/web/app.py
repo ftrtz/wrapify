@@ -2,7 +2,6 @@ from datetime import date
 import calendar
 
 import streamlit as st
-from streamlit_card import card
 import altair as alt
 import polars as pl
 import os
@@ -15,6 +14,7 @@ from web.load_tables import (
     load_artist_monthly,
 )
 from web.transform_tables import get_top_artists_played
+from web.artist_cards import artist_cards
 
 # for local development - python-dotenv is a dev dependency, absent from the web image
 try:
@@ -45,12 +45,37 @@ audio_features = load_audio_features(db_url, prod_schema)
 # ---------------------------------------- DASHBOARD ----------------------------------------
 st.title("Spotify Dashboard")
 
+state = st.session_state
+
+
+def default_month(year: int) -> int:
+    """Current month in the current year, no month (whole year) in any other."""
+    today = date.today()
+    return today.month if year == today.year else 0
+
+
+def reset_month():
+    state.selected_month = default_month(state.selected_year)
+
+
+def select_year(year: int):
+    state.selected_year = year
+    reset_month()
+
+
+# year 0 is the analytics rollup over all years - listed first, but the page opens
+# on the latest year (set via session state rather than option order)
+years = artist_monthly.filter(pl.col("year_played") > 0)["year_played"].unique().sort(descending=True).to_list()
+if "selected_year" not in state:
+    state.selected_year = years[0]
+
 with st.columns([1, 8])[0]:
     selected_year = st.selectbox(
         "Year",
-        options=artist_monthly["year_played"].unique().sort(descending=True).to_list(),
+        options=[0, *years],
+        key="selected_year",
+        on_change=reset_month,
         label_visibility="collapsed",
-        # year 0 is the analytics rollup over all years
         format_func=lambda y: "All years" if y == 0 else str(y),
         placeholder="Select Year",
     )
@@ -124,11 +149,8 @@ top_artist_per_month = (
 )
 
 # --- MONTH SELECTION
-
-# Initialize selected month in session state (default to current month)
-state = st.session_state
 if "selected_month" not in state:
-    state.selected_month = date.today().month
+    state.selected_month = default_month(selected_year)
 
 # ---------------------------------------- CHART ----------------------------------------
 def chart_gradient(df, x, y, color_rgb):
@@ -198,28 +220,6 @@ st.altair_chart(chart, height=200, width="stretch")
 
 # ---------------------------------------- MONTHLY CARDS ----------------------------------------
 
-# Define card with selection styling
-def card_1(month: int, month_data: dict | None, is_selected: bool = False):
-    card_styles = {
-        "card": {
-            "margin": "0",
-            "width": "100%",
-            "border": "3px solid #1DB954" if is_selected else "3px solid transparent",
-            "border-radius": "10px",
-            "box-shadow": "0 0 10px rgba(0,0,0,0.5)",
-        },
-        "filter": {
-            "background-color": "rgba(0, 0, 0, 0)"  # <- make the image not dimmed anymore
-        },
-    }
-    card(
-        title="",
-        text="",
-        image=month_data["image"],
-        styles=card_styles,
-        key=f"card_{month}",
-    )
-
 # Selection callback (toggle behavior: clicking selected month deselects it)
 def select_month(month):
     if state.selected_month == month:
@@ -227,26 +227,95 @@ def select_month(month):
     else:
         state.selected_month = month
 
-column_widths = [2 if month == state.selected_month else 1 for month in range(1, 13)]
-cols = st.columns(column_widths)
 
-for col_idx, month in enumerate(range(1, 13)):
-    # Get month data if available
-    month_df = top_artist_per_month.filter(pl.col("month_played") == month)
-    month_data = month_df.row(0, named=True) if month_df.shape[0] > 0 else None
+def build_cards(
+    period: str,
+    periods: list[int],
+    top_artists: pl.DataFrame,
+    totals: pl.DataFrame,
+    plays: pl.DataFrame,
+    label,
+    name,
+) -> list[dict]:
+    """One card per period (month or year) with its top artist.
 
-    with cols[col_idx]:
-        is_selected = state.selected_month == month
-        if month_data:
-            card_1(month, month_data, is_selected=is_selected)
-            st.button(
-                label=calendar.month_abbr[month],
-                key=f"btn_{month}",
-                on_click=select_month,
-                args=(month,),
-                use_container_width=True,
-                type="primary" if is_selected else "secondary",
-            )
+    `period` is the column holding the period in top_artists and totals; plays
+    needs that column too, derived from played_at.
+    """
+    # Most played track of each period's top artist (by play count, ties go to the
+    # most recently played - otherwise the pick changes between reruns)
+    top_track = dict(
+        plays.join(
+            top_artists.select(period, pl.col("artist_id").alias("main_artist_id")),
+            on=[period, "main_artist_id"],
+        )
+        .group_by(period, "track")
+        .agg(pl.len().alias("plays"), pl.col("played_at").max().alias("last_played"))
+        .sort(["plays", "last_played"], descending=True)
+        .group_by(period)
+        .first()
+        .select(period, "track")
+        .iter_rows()
+    )
+    total = dict(totals.select(period, "min_total").drop_nulls().iter_rows())
+    top_by_period = {r[period]: r for r in top_artists.iter_rows(named=True)}
+
+    cards = []
+    for p in periods:
+        card = {"id": p, "label": label(p), "name": name(p)}
+        if top := top_by_period.get(p):
+            card |= {
+                "artist": top["name"],
+                "image": top["image"],
+                "minutes": int(top["min_listened"]),
+                "share": round(100 * top["min_listened"] / total[p]) if total.get(p) else 0,
+                "top_track": top_track.get(p),
+            }
+        cards.append(card)
+    return cards
+
+
+if selected_year == 0:
+    # one card per year; clicking one opens that year
+    top_artist_per_year = (
+        artist_monthly.filter(pl.col("month_played") == 0, pl.col("year_played") > 0)
+        .sort("min_listened", descending=True)
+        .group_by("year_played")
+        .first()
+    )
+    artist_cards(
+        build_cards(
+            "year_played",
+            # full range, so a year without plays shows as a placeholder like a month does
+            list(range(min_year, max_year + 1)),
+            top_artist_per_year,
+            yearly_totals,
+            played_raw.with_columns(pl.col("played_at").dt.year().alias("year_played")),
+            label=str,
+            name=str,
+        ),
+        selected=0,
+        key="artist_cards_years",
+        on_click=select_year,
+    )
+else:
+    artist_cards(
+        build_cards(
+            "month_played",
+            list(range(1, 13)),
+            top_artist_per_month,
+            monthly_totals,
+            played_raw.filter(pl.col("played_at").dt.year() == selected_year).with_columns(
+                pl.col("played_at").dt.month().alias("month_played")
+            ),
+            label=lambda m: calendar.month_abbr[m],
+            name=lambda m: calendar.month_name[m],
+        ),
+        selected=state.selected_month,
+        # one widget per year, so a click is never compared against another year's state
+        key=f"artist_cards_{selected_year}",
+        on_click=select_month,
+    )
 
 # ---------------------------------------- PREPARE SELECTED MONTH DATA ----------------------------------------
 

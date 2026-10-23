@@ -35,8 +35,6 @@ web = [
     "connectorx>=0.4.6",
     "streamlit>=1.66.1",
     "altair>=6.3.0",
-    # Standalone package behind `streamlit_extras.card`
-    "streamlit-card>=1.0.2",
 ]
 
 [dependency-groups]
