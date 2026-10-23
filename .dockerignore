@@ -20,6 +20,8 @@ src/etl/data/
 # VCS / editor / project scratch
 .git/
 .gitignore
-.streamlit/
+# only the committed theme config, never secrets.toml
+.streamlit/*
+!.streamlit/config.toml
 *.png
 debug.py
