@@ -22,6 +22,8 @@ export default function (component) {
         parentElement.appendChild(wrap);
     }
     strip.replaceChildren();
+    // gap comes from Python (CARD_GAP), which also positions the chart above
+    strip.style.setProperty("--card-gap", `${data.gap * 100}%`);
 
     for (const m of data.items) {
         const tile = document.createElement("button");

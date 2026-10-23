@@ -14,7 +14,7 @@ from web.load_tables import (
     load_artist_monthly,
 )
 from web.transform_tables import get_top_artists_played
-from web.artist_cards import artist_cards
+from web.artist_cards import artist_cards, card_centers
 
 # for local development - python-dotenv is a dev dependency, absent from the web image
 try:
@@ -69,7 +69,8 @@ years = artist_monthly.filter(pl.col("year_played") > 0)["year_played"].unique()
 if "selected_year" not in state:
     state.selected_year = years[0]
 
-with st.columns([1, 8])[0]:
+# year picker left, chart mode right; fixed widths so neither gets squeezed on narrow screens
+with st.container(horizontal=True, horizontal_alignment="distribute", vertical_alignment="center"):
     selected_year = st.selectbox(
         "Year",
         options=[0, *years],
@@ -78,6 +79,18 @@ with st.columns([1, 8])[0]:
         label_visibility="collapsed",
         format_func=lambda y: "All years" if y == 0 else str(y),
         placeholder="Select Year",
+        width=160,
+    )
+    chart_mode = st.segmented_control(
+        "Chart",
+        options=["per_period", "cumulative"],
+        format_func=lambda m: ("Yearly" if selected_year == 0 else "Monthly")
+        if m == "per_period"
+        else "Cumulative",
+        default="per_period",
+        required=True,
+        key="chart_mode",
+        label_visibility="collapsed",
     )
 
 # ---------------------------------------- APPLY FILTERS ----------------------------------------
@@ -154,69 +167,115 @@ if "selected_month" not in state:
 
 # ---------------------------------------- CHART ----------------------------------------
 def chart_gradient(df, x, y, color_rgb):
+    """Gradient area chart; hovering marks the nearest period with a point and guide line."""
+    color = f"rgb({color_rgb})"
+    # nearest period to the pointer; empty=False so nothing is marked until hovering
+    hover = alt.selection_point(
+        fields=[x], nearest=True, on="pointerover", clear="pointerout", empty=False
+    )
 
-    chart = (
-        alt.Chart(df)
-        .mark_area(
-            line={"color": f"rgba({color_rgb}, 1)"},
-            interpolate="monotone",
-            color=alt.Gradient(
-                gradient="linear",
-                stops=[
-                    alt.GradientStop(color=f"rgba({color_rgb}, 0)", offset=0),
-                    alt.GradientStop(color=f"rgba({color_rgb}, 0.7)", offset=1),
-                ],
-                x1=1,
-                x2=1,
-                y1=1,
-                y2=0,
-            ),
-        )
-        .encode(
-            alt.X(
-                f"{x}:O",
-                title=None,
-                # keep months without data (null) on the axis instead of dropping them
-                scale=alt.Scale(domain=df[x].to_list()),
-                axis=alt.Axis(
-                    labelExpr=f"{calendar.month_name[1:]}[datum.value-1]" if x == "month_played" else "datum.value",
-                    labelAngle=0
-                ),
-            ),
-            alt.Y(
-                f"{y}:Q",
-                title=None,
-                axis=alt.Axis(grid=False, labels=False, ticks=False),
-            ),
-            # monthly data has no year column and yearly data no month name
-            tooltip=[
-                alt.Tooltip("month_name:O", title="Month")
-                if x == "month_played"
-                else alt.Tooltip("year_played:O", title="Year"),
-                alt.Tooltip(f"{y}:Q", title="Min listened", format=",d"),
+    base = alt.Chart(df).encode(
+        # each point sits at the center of its card below (x_pos, 0-1 of the row
+        # width), so the curve stretches around the wider selected card too
+        alt.X(
+            "x_pos:Q",
+            title=None,
+            scale=alt.Scale(domain=[0, 1], nice=False, zero=False),
+            # no x labels - the cards below name each month/year, and the tooltip too
+            axis=None,
+        ),
+    )
+    # subtle y axis: a few faint dashed gridlines with small labels drawn inside the
+    # plot (left-aligned just above each line), so the chart keeps its full width
+    y_enc = alt.Y(
+        f"{y}:Q",
+        title=None,
+        axis=alt.Axis(
+            tickCount=3,
+            domain=False,
+            ticks=False,
+            tickSize=0,
+            grid=True,
+            gridColor="white",
+            gridOpacity=0.08,
+            gridDash=[2, 4],
+            labelAlign="left",
+            labelBaseline="bottom",
+            labelPadding=-4,
+            labelFontSize=10,
+            labelOpacity=0.5,
+            # "2k"; no label on the zero line
+            labelExpr="datum.value ? format(datum.value, '~s') : ''",
+        ),
+    )
+    # monthly data has no year column and yearly data no month name
+    tooltip = [
+        alt.Tooltip("month_name:O", title="Month")
+        if x == "month_played"
+        else alt.Tooltip("year_played:O", title="Year"),
+        alt.Tooltip("min_total:Q", title="Min listened", format=",d"),
+        alt.Tooltip("min_cum:Q", title="Running total", format=",d"),
+    ]
+
+    area = base.mark_area(
+        line={"color": color},
+        interpolate="monotone",
+        color=alt.Gradient(
+            gradient="linear",
+            stops=[
+                alt.GradientStop(color=f"rgba({color_rgb}, 0)", offset=0),
+                alt.GradientStop(color=f"rgba({color_rgb}, 0.7)", offset=1),
             ],
-        )
+            x1=1,
+            x2=1,
+            y1=1,
+            y2=0,
+        ),
+    ).encode(y_enc)
+    # invisible points that pick up the pointer (nearest=True) and carry the tooltip
+    selectors = base.mark_point(opacity=0, size=1).encode(y_enc, tooltip=tooltip).add_params(hover)
+    guide = base.mark_rule(color=color, strokeDash=[3, 3]).encode(
+        opacity=alt.when(hover).then(alt.value(0.5)).otherwise(alt.value(0))
     )
-    return chart
-
-
-if selected_year == 0:
-    chart = chart_gradient(
-        yearly_totals,
-        x="year_played",
-        y="min_total",
-        color_rgb="29, 185, 84"
+    point = base.mark_point(filled=True, size=90, color=color, stroke="white", strokeWidth=1.5).encode(
+        y_enc, opacity=alt.when(hover).then(alt.value(1)).otherwise(alt.value(0))
     )
+    return alt.layer(area, guide, point, selectors)
 
-else:
-    chart = chart_gradient(
-        monthly_totals,
-        x="month_played",
-        y="min_total",
-        color_rgb="29, 185, 84"
+
+period_col = "year_played" if selected_year == 0 else "month_played"
+period_totals = yearly_totals if selected_year == 0 else monthly_totals
+centers = card_centers(
+    period_totals[period_col].to_list(),
+    selected=0 if selected_year == 0 else state.selected_month,
+)
+period_totals = period_totals.with_columns(
+    # running total; null (no data yet) stays null so the curve still stops there
+    pl.col("min_total").cum_sum().alias("min_cum"),
+    pl.col(period_col).replace_strict(centers, return_dtype=pl.Float64).alias("x_pos"),
+)
+chart = chart_gradient(
+    period_totals,
+    x=period_col,
+    y="min_cum" if chart_mode == "cumulative" else "min_total",
+    color_rgb="29, 185, 84",
+)
+period_word = "year" if selected_year == 0 else "month"
+# Hide the chart's hover toolbar (table/download/fullscreen) - not needed here, and it
+# floats over the chart mode toggle. No native option exists, so scope a CSS rule to
+# this chart via its container key (.st-key-listening_chart).
+st.html(
+    "<style>.st-key-listening_chart [data-testid='stElementToolbar'] { display: none; }</style>"
+)
+with st.container(key="listening_chart"):
+    st.altair_chart(
+        chart,
+        height=200,
+        width="stretch",
+        alt=f"Minutes listened per {period_word}"
+        if chart_mode == "per_period"
+        else f"Cumulative minutes listened by {period_word}",
     )
-
-st.altair_chart(chart, height=200, width="stretch")
 
 # ---------------------------------------- MONTHLY CARDS ----------------------------------------
 
@@ -267,7 +326,7 @@ def build_cards(
             card |= {
                 "artist": top["name"],
                 "image": top["image"],
-                "minutes": int(top["min_listened"]),
+                "minutes": round(top["min_listened"]),
                 "share": round(100 * top["min_listened"] / total[p]) if total.get(p) else 0,
                 "top_track": top_track.get(p),
             }

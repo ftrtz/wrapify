@@ -254,7 +254,10 @@ Use module-style imports when running with `uv run`:
   "All years"), a Custom Components v2 element (`st.components.v2`,
   inline HTML/CSS/JS in the page, no iframe; needs Streamlit >= 1.51). Styles and
   logic live in `style.css` / `main.js`, read at import - restart Streamlit after
-  editing them. Clicks come back as a `clicked` trigger; the component renders in a
+  editing them. The area chart positions each point over its card via
+  `card_centers()` (which mirrors the wide layout: `CARD_GAP` as a percentage gap,
+  selected card flex-grow 2) - change the card sizing/gap in `style.css` and that
+  function together. Clicks come back as a `clicked` trigger; the component renders in a
   shadow root, so DOM queries from outside (e.g. Playwright `evaluate`) must go
   through a locator.
 

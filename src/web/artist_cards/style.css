@@ -6,7 +6,7 @@
 .strip {
     position: relative; /* offsetParent for centering the selected tile */
     display: flex;
-    gap: 0.6rem;
+    gap: var(--card-gap, 0.7%);
 }
 
 .tile {
@@ -106,6 +106,7 @@
 @container (max-width: 900px) {
     .strip {
         flex-wrap: wrap;
+        gap: 0.6rem;
     }
 
     .tile,
