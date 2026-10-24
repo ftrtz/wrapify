@@ -35,6 +35,7 @@ web = [
     "connectorx>=0.4.6",
     "streamlit>=1.66.1",
     "altair>=6.3.0",
+    "pillow>=13.0.0",
 ]
 
 [dependency-groups]
