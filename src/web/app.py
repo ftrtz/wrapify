@@ -192,9 +192,10 @@ def chart_gradient(df, x, y, color_rgb, artist_lines=None):
     """Gradient area chart; hovering marks the nearest period with a point and guide line.
 
     artist_lines, if given, replaces the area with one series per artist (artist_id,
-    name, rank, color, x_pos, the same y column as df and a portrait data URI on its last
-    point): lines in the artist's color ending in a round portrait. The hover marks them
-    and the tooltip lists them, next to the period's total.
+    name, rank, color, x_pos, the period columns, the same y column as df and a portrait
+    data URI on its last point): lines in the artist's color ending in a round portrait.
+    Hovering then picks the nearest artist's point - its portrait moves there and the
+    tooltip shows just that artist.
     """
     color = f"rgb({color_rgb})"
     show_artists = artist_lines is not None
@@ -203,19 +204,6 @@ def chart_gradient(df, x, y, color_rgb, artist_lines=None):
         # every artist hidden: an empty chart that still has the hover and tooltip
         artist_lines = None
         show_artists = False
-    if show_artists:
-        # one column per artist, so the period's tooltip can list them all
-        df = df.join(
-            artist_lines.with_columns(pl.format("artist_{}", "rank").alias("artist_col")).pivot(
-                "artist_col", index=x, values=y
-            ),
-            on=x,
-            how="left",
-        )
-    # nearest period to the pointer; empty=False so nothing is marked until hovering
-    hover = alt.selection_point(
-        fields=[x], nearest=True, on="pointerover", clear="pointerout", empty=False
-    )
 
     base = alt.Chart(df).encode(
         # each point sits at the center of its card below (x_pos, 0-1 of the row
@@ -254,19 +242,119 @@ def chart_gradient(df, x, y, color_rgb, artist_lines=None):
         ),
     )
     # monthly data has no year column and yearly data no month name
-    tooltip = [
+    period_tooltip = (
         alt.Tooltip("month_name:O", title="Month")
         if x == "month_played"
-        else alt.Tooltip("year_played:O", title="Year"),
+        else alt.Tooltip("year_played:O", title="Year")
+    )
+
+    if show_artists:
+        # nearest artist point to the pointer: hover marks that point, artist_hover its
+        # artist (to fade the others) and period_hover its period (to move every
+        # portrait there)
+        hover = alt.selection_point(
+            fields=[x, "artist_id"],
+            nearest=True,
+            on="pointerover",
+            clear="pointerout",
+            empty=False,
+        )
+        artist_hover = alt.selection_point(
+            fields=["artist_id"], nearest=True, on="pointerover", clear="pointerout", empty=False
+        )
+        period_hover = alt.selection_point(
+            # named, for the "nothing hovered" test on its store below
+            name="period_hover",
+            fields=[x],
+            nearest=True,
+            on="pointerover",
+            clear="pointerout",
+            empty=False,
+        )
+        lines_base = alt.Chart(artist_lines).encode(base.encoding.x)
+        artist_color = alt.Color("color:N", scale=None)
+
+        # while an artist is hovered, the others fade
+        def unless_other_hovered(opacity, faded):
+            return (
+                alt.when(artist_hover, empty=True)
+                .then(alt.value(opacity))
+                .otherwise(alt.value(faded))
+            )
+
+        lines = lines_base.mark_line(interpolate="monotone", strokeWidth=1.5).encode(
+            y_enc, artist_color, detail="artist_id:N", opacity=unless_other_hovered(0.85, 0.2)
+        )
+        # faint shading under each line (flat - a gradient can't take its color from data)
+        shading = lines_base.mark_area(interpolate="monotone").encode(
+            y_enc, artist_color, detail="artist_id:N", opacity=unless_other_hovered(0.1, 0.03)
+        )
+        # the portraits, looked up per artist so the data URIs aren't repeated on every
+        # period's row: at the end of each line, or while hovering all at the hovered
+        # period - the hovered artist's in full, the others faded like their lines
+        portraits_base = (
+            lines_base.transform_lookup(
+                lookup="artist_id",
+                from_=alt.LookupData(
+                    artist_lines.filter(pl.col("portrait").is_not_null()).select(
+                        "artist_id", pl.col("portrait").alias("portrait_url")
+                    ),
+                    key="artist_id",
+                    fields=["portrait_url"],
+                ),
+            )
+            .transform_filter("datum.portrait_url != null")
+            .mark_image(width=PORTRAIT_PX, height=PORTRAIT_PX)
+        )
+        portraits = portraits_base.encode(
+            y_enc,
+            url="portrait_url:N",
+            opacity=alt.when(hover)
+            # the hovered artist's is drawn by hovered_portrait, on top of all others
+            .then(alt.value(0))
+            .when(period_hover)
+            .then(alt.value(0.35))
+            # nothing hovered: the line ends
+            .when("!length(data('period_hover_store')) && datum.portrait != null")
+            .then(alt.value(1))
+            .otherwise(alt.value(0)),
+            # drawn lowest rank first, so a higher ranking artist's portrait lies on top
+            order=alt.Order("rank:Q", sort="descending"),
+        )
+        hovered_portrait = portraits_base.encode(
+            y_enc,
+            url="portrait_url:N",
+            opacity=alt.when(hover).then(alt.value(1)).otherwise(alt.value(0)),
+        )
+        guide = lines_base.mark_rule(color="white", strokeDash=[3, 3]).encode(
+            opacity=alt.when(hover).then(alt.value(0.5)).otherwise(alt.value(0))
+        )
+        # invisible points that pick up the pointer (nearest=True) and carry the tooltip
+        selectors = (
+            lines_base.mark_point(opacity=0, size=1)
+            .encode(
+                y_enc,
+                tooltip=[
+                    alt.Tooltip("name:N", title="Artist"),
+                    period_tooltip,
+                    alt.Tooltip("min_total:Q", title="Min listened", format=",d"),
+                    alt.Tooltip("min_cum:Q", title="Running total", format=",d"),
+                ],
+            )
+            .add_params(hover, artist_hover, period_hover)
+        )
+        # selectors last, so the hover still finds the nearest point over the portraits
+        return alt.layer(shading, lines, guide, portraits, hovered_portrait, selectors)
+
+    # nearest period to the pointer; empty=False so nothing is marked until hovering
+    hover = alt.selection_point(
+        fields=[x], nearest=True, on="pointerover", clear="pointerout", empty=False
+    )
+    tooltip = [
+        period_tooltip,
         alt.Tooltip("min_total:Q", title="Min listened", format=",d"),
         alt.Tooltip("min_cum:Q", title="Running total", format=",d"),
     ]
-    if show_artists:
-        tooltip += [
-            alt.Tooltip(f"artist_{rank}:Q", title=name, format=",d")
-            for rank, name in artist_lines.select("rank", "name").unique().sort("rank").iter_rows()
-        ]
-
     area = base.mark_area(
         line={"color": color},
         interpolate="monotone",
@@ -296,53 +384,6 @@ def chart_gradient(df, x, y, color_rgb, artist_lines=None):
         filled=True, size=90, color=color, stroke="white", strokeWidth=1.5
     ).encode(y_enc, opacity=alt.when(hover).then(alt.value(1)).otherwise(alt.value(0)))
     layers = [area] if show_total else []
-    if show_artists:
-        lines_base = alt.Chart(artist_lines).encode(base.encoding.x)
-        artist_color = alt.Color("color:N", scale=None)
-        lines = lines_base.mark_line(interpolate="monotone", strokeWidth=1.5, opacity=0.85).encode(
-            y_enc, artist_color, detail="artist_id:N"
-        )
-        # the portraits sit at the end of each line and move to the hovered period: the
-        # end ones show only while nothing (or their own period) is hovered
-        # drawn lowest rank first, so a higher ranking artist's portrait lies on top
-        portrait_order = alt.Order("rank:Q", sort="descending")
-        end_portraits = (
-            lines_base.transform_filter("datum.portrait != null")
-            .mark_image(width=PORTRAIT_PX, height=PORTRAIT_PX)
-            .encode(
-                y_enc,
-                url="portrait:N",
-                opacity=alt.when(hover, empty=True).then(alt.value(1)).otherwise(alt.value(0)),
-                order=portrait_order,
-            )
-        )
-        # looked up per artist, so the data URIs aren't repeated on every period's row
-        hover_portraits = (
-            lines_base.transform_lookup(
-                lookup="artist_id",
-                from_=alt.LookupData(
-                    artist_lines.filter(pl.col("portrait").is_not_null()).select(
-                        "artist_id", pl.col("portrait").alias("hover_portrait")
-                    ),
-                    key="artist_id",
-                    fields=["hover_portrait"],
-                ),
-            )
-            .transform_filter("datum.hover_portrait != null")
-            .mark_image(width=PORTRAIT_PX, height=PORTRAIT_PX)
-            .encode(
-                y_enc,
-                url="hover_portrait:N",
-                opacity=alt.when(hover).then(alt.value(1)).otherwise(alt.value(0)),
-                order=portrait_order,
-            )
-        )
-        # faint shading under each line (flat - a gradient can't take its color from data)
-        shading = lines_base.mark_area(interpolate="monotone", opacity=0.1).encode(
-            y_enc, artist_color, detail="artist_id:N"
-        )
-        layers += [shading, lines, end_portraits, hover_portraits]
-    # selectors last, so the hover still finds the nearest period over the portraits
     return alt.layer(*layers, guide, *([point] if show_total else []), selectors)
 
 
@@ -400,7 +441,13 @@ if chart_series == "artists":
         label_visibility="collapsed",
     )
     artist_lines = (
-        period_totals.select(period_col, "x_pos", "min_total")
+        # the period columns too, for the tooltip (monthly data has a month name)
+        period_totals.select(
+            period_col,
+            *(["month_name"] if period_col == "month_played" else []),
+            "x_pos",
+            "min_total",
+        )
         .join(top_line_artists.filter(pl.col("artist_id").is_in(shown_artists)), how="cross")
         .join(
             artist_periods.select(period_col, "artist_id", pl.col("min_listened").alias("minutes")),
