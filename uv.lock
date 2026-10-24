@@ -4217,6 +4217,7 @@ etl = [
 web = [
     { name = "altair" },
     { name = "connectorx" },
+    { name = "pillow" },
     { name = "polars" },
     { name = "streamlit" },
 ]
@@ -4237,6 +4238,7 @@ requires-dist = [
     { name = "fastapi", extras = ["standard"], marker = "extra == 'api'", specifier = ">=0.150.0" },
     { name = "jinja2", marker = "extra == 'etl'", specifier = ">=3.1.6" },
     { name = "pandas", marker = "extra == 'etl'", specifier = ">=3.1.0" },
+    { name = "pillow", marker = "extra == 'web'", specifier = ">=13.0.0" },
     { name = "polars", marker = "extra == 'web'", specifier = ">=2.0.0" },
     { name = "prefect", extras = ["sqlalchemy"], marker = "extra == 'etl'", specifier = ">=3.9.0" },
     { name = "psycopg2-binary", marker = "extra == 'api'", specifier = ">=2.9.13" },

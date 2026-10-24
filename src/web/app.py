@@ -14,6 +14,7 @@ from web.load_tables import (
 )
 from web.transform_tables import get_top_artists_played
 from web.artist_cards import artist_cards, card_centers
+from web.portraits import PORTRAIT_PX, portrait
 
 # for local development - python-dotenv is a dev dependency, absent from the web image
 try:
@@ -82,19 +83,39 @@ with st.container(horizontal=True, horizontal_alignment="distribute", vertical_a
         label_visibility="collapsed",
         format_func=lambda y: "All years" if y == 0 else str(y),
         placeholder="Select Year",
+        # no typing - a handful of years needs no search, and on mobile it pops up the keyboard
+        filter_mode=None,
         width=160,
     )
-    chart_mode = st.segmented_control(
-        "Chart",
-        options=["per_period", "cumulative"],
-        format_func=lambda m: (
-            ("Yearly" if selected_year == 0 else "Monthly") if m == "per_period" else "Cumulative"
-        ),
-        default="per_period",
-        required=True,
-        key="chart_mode",
-        label_visibility="collapsed",
-    )
+    with st.container(
+        horizontal=True,
+        horizontal_alignment="right",
+        vertical_alignment="center",
+        width="content",
+    ):
+        # the total and the artists don't share a scale well, so it's one or the other
+        chart_series = st.segmented_control(
+            "Show",
+            options=["total", "artists"],
+            format_func={"total": "Total", "artists": "Top artists"}.get,
+            default="total",
+            required=True,
+            key="chart_series",
+            label_visibility="collapsed",
+        )
+        chart_mode = st.segmented_control(
+            "Chart",
+            options=["per_period", "cumulative"],
+            format_func=lambda m: (
+                ("Yearly" if selected_year == 0 else "Monthly")
+                if m == "per_period"
+                else "Cumulative"
+            ),
+            default="per_period",
+            required=True,
+            key="chart_mode",
+            label_visibility="collapsed",
+        )
 
 # ---------------------------------------- APPLY FILTERS ----------------------------------------
 # --- YEAR SELECTION
@@ -162,9 +183,35 @@ if "selected_month" not in state:
 
 
 # ---------------------------------------- CHART ----------------------------------------
-def chart_gradient(df, x, y, color_rgb):
-    """Gradient area chart; hovering marks the nearest period with a point and guide line."""
+# number of top artists drawn as lines in the chart - plus, without a selected month,
+# each card's top artist not already among them
+TOP_ARTIST_LINES = 5
+
+
+def chart_gradient(df, x, y, color_rgb, artist_lines=None):
+    """Gradient area chart; hovering marks the nearest period with a point and guide line.
+
+    artist_lines, if given, replaces the area with one series per artist (artist_id,
+    name, rank, color, x_pos, the same y column as df and a portrait data URI on its last
+    point): lines in the artist's color ending in a round portrait. The hover marks them
+    and the tooltip lists them, next to the period's total.
+    """
     color = f"rgb({color_rgb})"
+    show_artists = artist_lines is not None
+    show_total = not show_artists
+    if show_artists and not artist_lines.height:
+        # every artist hidden: an empty chart that still has the hover and tooltip
+        artist_lines = None
+        show_artists = False
+    if show_artists:
+        # one column per artist, so the period's tooltip can list them all
+        df = df.join(
+            artist_lines.with_columns(pl.format("artist_{}", "rank").alias("artist_col")).pivot(
+                "artist_col", index=x, values=y
+            ),
+            on=x,
+            how="left",
+        )
     # nearest period to the pointer; empty=False so nothing is marked until hovering
     hover = alt.selection_point(
         fields=[x], nearest=True, on="pointerover", clear="pointerout", empty=False
@@ -186,6 +233,8 @@ def chart_gradient(df, x, y, color_rgb):
     y_enc = alt.Y(
         f"{y}:Q",
         title=None,
+        # the artist areas overlap rather than stack
+        stack=None,
         axis=alt.Axis(
             tickCount=3,
             domain=False,
@@ -212,6 +261,11 @@ def chart_gradient(df, x, y, color_rgb):
         alt.Tooltip("min_total:Q", title="Min listened", format=",d"),
         alt.Tooltip("min_cum:Q", title="Running total", format=",d"),
     ]
+    if show_artists:
+        tooltip += [
+            alt.Tooltip(f"artist_{rank}:Q", title=name, format=",d")
+            for rank, name in artist_lines.select("rank", "name").unique().sort("rank").iter_rows()
+        ]
 
     area = base.mark_area(
         line={"color": color},
@@ -229,14 +283,67 @@ def chart_gradient(df, x, y, color_rgb):
         ),
     ).encode(y_enc)
     # invisible points that pick up the pointer (nearest=True) and carry the tooltip
-    selectors = base.mark_point(opacity=0, size=1).encode(y_enc, tooltip=tooltip).add_params(hover)
-    guide = base.mark_rule(color=color, strokeDash=[3, 3]).encode(
+    selectors = (
+        base.mark_point(opacity=0, size=1)
+        # without the area, keep them on the zero line so they don't stretch the y scale
+        .encode(y_enc if show_total else alt.YDatum(0), tooltip=tooltip)
+        .add_params(hover)
+    )
+    guide = base.mark_rule(color=color if show_total else "white", strokeDash=[3, 3]).encode(
         opacity=alt.when(hover).then(alt.value(0.5)).otherwise(alt.value(0))
     )
     point = base.mark_point(
         filled=True, size=90, color=color, stroke="white", strokeWidth=1.5
     ).encode(y_enc, opacity=alt.when(hover).then(alt.value(1)).otherwise(alt.value(0)))
-    return alt.layer(area, guide, point, selectors)
+    layers = [area] if show_total else []
+    if show_artists:
+        lines_base = alt.Chart(artist_lines).encode(base.encoding.x)
+        artist_color = alt.Color("color:N", scale=None)
+        lines = lines_base.mark_line(interpolate="monotone", strokeWidth=1.5, opacity=0.85).encode(
+            y_enc, artist_color, detail="artist_id:N"
+        )
+        # the portraits sit at the end of each line and move to the hovered period: the
+        # end ones show only while nothing (or their own period) is hovered
+        # drawn lowest rank first, so a higher ranking artist's portrait lies on top
+        portrait_order = alt.Order("rank:Q", sort="descending")
+        end_portraits = (
+            lines_base.transform_filter("datum.portrait != null")
+            .mark_image(width=PORTRAIT_PX, height=PORTRAIT_PX)
+            .encode(
+                y_enc,
+                url="portrait:N",
+                opacity=alt.when(hover, empty=True).then(alt.value(1)).otherwise(alt.value(0)),
+                order=portrait_order,
+            )
+        )
+        # looked up per artist, so the data URIs aren't repeated on every period's row
+        hover_portraits = (
+            lines_base.transform_lookup(
+                lookup="artist_id",
+                from_=alt.LookupData(
+                    artist_lines.filter(pl.col("portrait").is_not_null()).select(
+                        "artist_id", pl.col("portrait").alias("hover_portrait")
+                    ),
+                    key="artist_id",
+                    fields=["hover_portrait"],
+                ),
+            )
+            .transform_filter("datum.hover_portrait != null")
+            .mark_image(width=PORTRAIT_PX, height=PORTRAIT_PX)
+            .encode(
+                y_enc,
+                url="hover_portrait:N",
+                opacity=alt.when(hover).then(alt.value(1)).otherwise(alt.value(0)),
+                order=portrait_order,
+            )
+        )
+        # faint shading under each line (flat - a gradient can't take its color from data)
+        shading = lines_base.mark_area(interpolate="monotone", opacity=0.1).encode(
+            y_enc, artist_color, detail="artist_id:N"
+        )
+        layers += [shading, lines, end_portraits, hover_portraits]
+    # selectors last, so the hover still finds the nearest period over the portraits
+    return alt.layer(*layers, guide, *([point] if show_total else []), selectors)
 
 
 period_col = "year_played" if selected_year == 0 else "month_played"
@@ -250,11 +357,79 @@ period_totals = period_totals.with_columns(
     pl.col("min_total").cum_sum().alias("min_cum"),
     pl.col(period_col).replace_strict(centers, return_dtype=pl.Float64).alias("x_pos"),
 )
+if chart_series == "artists":
+    # the top artists of the selected month - or of the year without one, and of all
+    # years in "All years" - over the chart's periods; within the data range a period
+    # without plays is 0, outside it null like the totals
+    lines_month = 0 if selected_year == 0 else state.selected_month
+    if selected_year == 0:
+        artist_periods = artist_monthly.filter(
+            pl.col("year_played") > 0, pl.col("month_played") == 0
+        )
+    else:
+        artist_periods = year_data.filter(pl.col("month_played") > 0)
+    period_ranking = year_data.filter(pl.col("month_played") == lines_month).sort(
+        "min_listened", descending=True
+    )
+    line_artist_ids = period_ranking.head(TOP_ARTIST_LINES)["artist_id"]
+    if lines_month == 0:
+        card_artist_ids = (
+            artist_periods.sort("min_listened", descending=True)
+            .group_by(period_col)
+            .first()["artist_id"]
+        )
+        line_artist_ids = pl.concat([line_artist_ids, card_artist_ids])
+    top_line_artists = (
+        period_ranking.filter(pl.col("artist_id").is_in(line_artist_ids.to_list()))
+        .select("artist_id", "name", "image")
+        .with_row_index("rank")
+    )
+    image_and_color = [portrait(url) for url in top_line_artists["image"]]
+    top_line_artists = top_line_artists.with_columns(
+        pl.Series("image", [uri for uri, _ in image_and_color], dtype=pl.Utf8),
+        pl.Series("color", [color for _, color in image_and_color], dtype=pl.Utf8),
+    )
+    shown_artists = st.pills(
+        "Artists in chart",
+        options=top_line_artists["artist_id"].to_list(),
+        format_func=dict(top_line_artists.select("artist_id", "name").iter_rows()).get,
+        selection_mode="multi",
+        default=top_line_artists["artist_id"].to_list(),
+        # options differ per year and month
+        key=f"artist_lines_{selected_year}_{lines_month}",
+        label_visibility="collapsed",
+    )
+    artist_lines = (
+        period_totals.select(period_col, "x_pos", "min_total")
+        .join(top_line_artists.filter(pl.col("artist_id").is_in(shown_artists)), how="cross")
+        .join(
+            artist_periods.select(period_col, "artist_id", pl.col("min_listened").alias("minutes")),
+            on=[period_col, "artist_id"],
+            how="left",
+        )
+        .with_columns(
+            pl.when(pl.col("min_total").is_not_null())
+            .then(pl.col("minutes").fill_null(0))
+            .alias("min_total")
+        )
+        .sort("rank", period_col)
+        .with_columns(pl.col("min_total").cum_sum().over("artist_id").alias("min_cum"))
+    )
+    y_col = "min_cum" if chart_mode == "cumulative" else "min_total"
+    # portrait on the last point of each line
+    is_last = pl.col(period_col) == pl.col(period_col).filter(pl.col(y_col).is_not_null()).max()
+    artist_lines = artist_lines.with_columns(
+        pl.when(is_last.over("artist_id")).then(pl.col("image")).alias("portrait")
+    ).drop("image", "minutes")
+else:
+    artist_lines = None
+
 chart = chart_gradient(
     period_totals,
     x=period_col,
     y="min_cum" if chart_mode == "cumulative" else "min_total",
     color_rgb="29, 185, 84",
+    artist_lines=artist_lines,
 )
 period_word = "year" if selected_year == 0 else "month"
 # Hide the chart's hover toolbar (table/download/fullscreen) - not needed here, and it
