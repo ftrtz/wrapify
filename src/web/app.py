@@ -150,8 +150,10 @@ monthly_totals = all_months.join(
     .then(None)
     .otherwise(pl.col("min_total").fill_null(0))
     .alias("min_total"),
+    # not map_elements with a lambda: polars caches the functions it is given, and a new
+    # lambda per rerun kept every rerun's globals - all its DataFrames - alive
     pl.col("month_played")
-    .map_elements(lambda x: calendar.month_name[1:][x - 1], return_dtype=pl.Utf8)
+    .replace_strict(dict(enumerate(calendar.month_name)), return_dtype=pl.Utf8)
     .alias("month_name"),
 )
 # Calculate total minutes per year (fill missing years with 0)
