@@ -3,6 +3,7 @@ from polars import DataFrame
 import streamlit as st
 
 
+@st.cache_data(ttl=3600)
 def load_played_joined(_db_url: str, db_schema: str) -> DataFrame:
     """
     Load data from the database and join tables to get played tracks with their details.
