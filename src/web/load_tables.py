@@ -2,8 +2,13 @@ import connectorx as cx
 from polars import DataFrame
 import streamlit as st
 
+# cache_resource, not cache_data: cache_data hands every script run its own unpickled
+# copy, and each browser session keeps its last run's copies alive - for at least
+# server.disconnectedSessionTTL after the tab closes. These frames are only read
+# (polars operations return new frames), so all sessions can share one.
 
-@st.cache_data(ttl=3600)
+
+@st.cache_resource(ttl=3600)
 def load_played_joined(_db_url: str, db_schema: str) -> DataFrame:
     """
     Load data from the database and join tables to get played tracks with their details.
@@ -40,7 +45,7 @@ def load_played_joined(_db_url: str, db_schema: str) -> DataFrame:
     return df
 
 
-@st.cache_data(ttl=3600)
+@st.cache_resource(ttl=3600)
 def load_artist(_db_url: str, db_schema: str) -> DataFrame:
     """
     Load artist data from the database.
@@ -60,7 +65,7 @@ def load_artist(_db_url: str, db_schema: str) -> DataFrame:
     return df
 
 
-@st.cache_data(ttl=3600)
+@st.cache_resource(ttl=3600)
 def load_track(_db_url: str, db_schema: str) -> DataFrame:
     """
     Load track data from the database.
@@ -80,7 +85,7 @@ def load_track(_db_url: str, db_schema: str) -> DataFrame:
     return df
 
 
-@st.cache_data(ttl=3600)
+@st.cache_resource(ttl=3600)
 def load_audio_features(_db_url: str, db_schema: str) -> DataFrame:
     """
     Load audio features data from the database.
@@ -100,7 +105,7 @@ def load_audio_features(_db_url: str, db_schema: str) -> DataFrame:
     return df
 
 
-@st.cache_data(ttl=3600)
+@st.cache_resource(ttl=3600)
 def load_artist_monthly(_db_url: str, db_schema: str) -> DataFrame:
     """
     Load monthly artist data from the database.

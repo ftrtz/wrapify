@@ -56,7 +56,7 @@ container's docker-network IP (it can change when the container is recreated):
 
 ```bash
 # Look up the container IP, then tunnel localhost:5432 to it
-ssh <server> docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' wrapify-postgres
+ssh <server> "docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' wrapify-postgres"
 ssh -f -N -L 5432:<container-ip>:5432 <server>
 ```
 
